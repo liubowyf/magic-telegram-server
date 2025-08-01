@@ -1,0 +1,507 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Telegram 授权</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            margin: 0;
+            padding: 0;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        .container {
+            background: white;
+            padding: 2rem;
+            border-radius: 10px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+            width: 100%;
+            max-width: 450px;
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+        .header h1 {
+            color: #333;
+            margin: 0;
+            font-size: 1.8rem;
+        }
+        .header p {
+            color: #666;
+            margin: 0.5rem 0 0 0;
+        }
+        .step-indicator {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 2rem;
+            padding: 0 1rem;
+        }
+        .step {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            flex: 1;
+            position: relative;
+        }
+        .step:not(:last-child)::after {
+            content: '';
+            position: absolute;
+            top: 15px;
+            right: -50%;
+            width: 100%;
+            height: 2px;
+            background: #e1e5e9;
+            z-index: 1;
+        }
+        .step.active:not(:last-child)::after {
+            background: #667eea;
+        }
+        .step-number {
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            background: #e1e5e9;
+            color: #666;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            margin-bottom: 0.5rem;
+            position: relative;
+            z-index: 2;
+        }
+        .step.active .step-number {
+            background: #667eea;
+            color: white;
+        }
+        .step.completed .step-number {
+            background: #28a745;
+            color: white;
+        }
+        .step-label {
+            font-size: 0.8rem;
+            color: #666;
+            text-align: center;
+        }
+        .step.active .step-label {
+            color: #667eea;
+            font-weight: 500;
+        }
+        .form-step {
+            display: none;
+        }
+        .form-step.active {
+            display: block;
+        }
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+        label {
+            display: block;
+            margin-bottom: 0.5rem;
+            color: #333;
+            font-weight: 500;
+        }
+        input[type="text"], input[type="password"], input[type="tel"] {
+            width: 100%;
+            padding: 0.75rem;
+            border: 2px solid #e1e5e9;
+            border-radius: 5px;
+            font-size: 1rem;
+            transition: border-color 0.3s;
+            box-sizing: border-box;
+        }
+        input[type="text"]:focus, input[type="password"]:focus, input[type="tel"]:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        .btn {
+            width: 100%;
+            padding: 0.75rem;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 5px;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: transform 0.2s;
+            margin-bottom: 0.5rem;
+        }
+        .btn:hover {
+            transform: translateY(-2px);
+        }
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+        .btn-secondary {
+            background: #6c757d;
+        }
+        .message {
+            padding: 0.75rem;
+            border-radius: 5px;
+            margin-bottom: 1rem;
+            text-align: center;
+        }
+        .message.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .message.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .message.info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+        .input-group {
+            display: flex;
+            gap: 0.5rem;
+        }
+        .input-group input {
+            flex: 1;
+        }
+        .help-text {
+            font-size: 0.85rem;
+            color: #666;
+            margin-top: 0.25rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🔐 Telegram 授权</h1>
+            <p>请按步骤完成授权验证</p>
+        </div>
+        
+        <div class="step-indicator">
+            <div class="step active" id="step-1">
+                <div class="step-number">1</div>
+                <div class="step-label">API配置</div>
+            </div>
+            <div class="step" id="step-2">
+                <div class="step-number">2</div>
+                <div class="step-label">手机号</div>
+            </div>
+            <div class="step" id="step-3">
+                <div class="step-number">3</div>
+                <div class="step-label">验证码</div>
+            </div>
+            <div class="step" id="step-4">
+                <div class="step-number">4</div>
+                <div class="step-label">密码</div>
+            </div>
+        </div>
+        
+        <div id="message"></div>
+        
+        <!-- 步骤1: API配置 -->
+        <div class="form-step active" id="form-step-1">
+            <div class="form-group">
+                <label for="appId">App ID:</label>
+                <input type="text" id="appId" placeholder="请输入Telegram App ID">
+                <div class="help-text">从 https://my.telegram.org 获取</div>
+            </div>
+            <div class="form-group">
+                <label for="appHash">App Hash:</label>
+                <input type="text" id="appHash" placeholder="请输入Telegram App Hash">
+                <div class="help-text">从 https://my.telegram.org 获取</div>
+            </div>
+            <button class="btn" onclick="submitApiConfig()">下一步</button>
+        </div>
+        
+        <!-- 步骤2: 手机号 -->
+        <div class="form-step" id="form-step-2">
+            <div class="form-group">
+                <label for="phoneNumber">手机号:</label>
+                <input type="tel" id="phoneNumber" placeholder="请输入手机号 (如: +8613812345678)">
+                <div class="help-text">请包含国家代码，如中国号码以+86开头</div>
+            </div>
+            <button class="btn" onclick="submitPhoneNumber()">发送验证码</button>
+            <button class="btn btn-secondary" onclick="previousStep()">上一步</button>
+        </div>
+        
+        <!-- 步骤3: 验证码 -->
+        <div class="form-step" id="form-step-3">
+            <div class="form-group">
+                <label for="authCode">验证码:</label>
+                <input type="text" id="authCode" placeholder="请输入收到的验证码">
+                <div class="help-text">验证码已发送到您的Telegram账号</div>
+            </div>
+            <button class="btn" onclick="submitAuthCode()">验证</button>
+            <button class="btn btn-secondary" onclick="previousStep()">上一步</button>
+        </div>
+        
+        <!-- 步骤4: 二级密码 -->
+        <div class="form-step" id="form-step-4">
+            <div class="form-group">
+                <label for="password">二级密码:</label>
+                <input type="password" id="password" placeholder="请输入Telegram二级密码">
+                <div class="help-text">如果您设置了两步验证，请输入密码</div>
+            </div>
+            <button class="btn" onclick="submitPassword()">完成验证</button>
+            <button class="btn btn-secondary" onclick="skipPassword()">跳过 (无二级密码)</button>
+            <button class="btn btn-secondary" onclick="previousStep()">上一步</button>
+        </div>
+        
+        <!-- 完成页面 -->
+        <div class="form-step" id="form-step-complete">
+            <div class="message success">
+                <h3>🎉 授权完成！</h3>
+                <p>Telegram服务已成功启动，Session已生成。</p>
+            </div>
+            <button class="btn" onclick="location.reload()">重新开始</button>
+        </div>
+    </div>
+
+    <script>
+        let currentStep = 1;
+        const maxSteps = 4;
+        
+        function showMessage(text, type) {
+            const messageDiv = document.getElementById('message');
+            messageDiv.innerHTML = `<div class="message ${type}">${text}</div>`;
+            setTimeout(() => {
+                messageDiv.innerHTML = '';
+            }, 5000);
+        }
+        
+        function updateStepIndicator() {
+            for (let i = 1; i <= maxSteps; i++) {
+                const step = document.getElementById(`step-${i}`);
+                const formStep = document.getElementById(`form-step-${i}`);
+                
+                step.classList.remove('active', 'completed');
+                formStep.classList.remove('active');
+                
+                if (i < currentStep) {
+                    step.classList.add('completed');
+                } else if (i === currentStep) {
+                    step.classList.add('active');
+                    formStep.classList.add('active');
+                }
+            }
+        }
+        
+        function nextStep() {
+            if (currentStep < maxSteps) {
+                currentStep++;
+                updateStepIndicator();
+            }
+        }
+        
+        function previousStep() {
+            if (currentStep > 1) {
+                currentStep--;
+                updateStepIndicator();
+            }
+        }
+        
+        function showComplete() {
+            document.getElementById('form-step-complete').classList.add('active');
+            // 隐藏所有步骤
+            for (let i = 1; i <= maxSteps; i++) {
+                document.getElementById(`form-step-${i}`).classList.remove('active');
+                document.getElementById(`step-${i}`).classList.add('completed');
+                document.getElementById(`step-${i}`).classList.remove('active');
+            }
+        }
+        
+        async function submitApiConfig() {
+            const appId = document.getElementById('appId').value.trim();
+            const appHash = document.getElementById('appHash').value.trim();
+            
+            if (!appId || !appHash) {
+                showMessage('请填写完整的App ID和App Hash', 'error');
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/telegram/config', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ appId: parseInt(appId), appHash: appHash })
+                });
+                
+                const result = await response.json();
+                if (result.success) {
+                    showMessage('API配置成功', 'success');
+                    nextStep();
+                } else {
+                    showMessage(result.message || 'API配置失败', 'error');
+                }
+            } catch (error) {
+                showMessage('网络错误: ' + error.message, 'error');
+            }
+        }
+        
+        async function submitPhoneNumber() {
+            const phoneNumber = document.getElementById('phoneNumber').value.trim();
+            
+            if (!phoneNumber) {
+                showMessage('请输入手机号', 'error');
+                return;
+            }
+            
+            try {
+                // 先检查当前状态
+                const statusResponse = await fetch('/api/telegram/status');
+                const status = await statusResponse.text();
+                
+                if (status.includes('AuthorizationStateWaitCode')) {
+                    // 如果已经在等待验证码，直接跳转
+                    showMessage('验证码已发送，请输入验证码', 'info');
+                    nextStep();
+                    return;
+                }
+                
+                const response = await fetch('/api/telegram/auth/phone', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ phoneNumber: phoneNumber })
+                });
+                
+                const result = await response.json();
+                if (result.success) {
+                    showMessage('验证码已发送', 'success');
+                    nextStep();
+                } else {
+                    showMessage(result.message || '发送验证码失败', 'error');
+                }
+            } catch (error) {
+                showMessage('网络错误: ' + error.message, 'error');
+            }
+        }
+        
+        async function submitAuthCode() {
+            const code = document.getElementById('authCode').value.trim();
+            
+            if (!code) {
+                showMessage('请输入验证码', 'error');
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/telegram/auth/code', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ code: code })
+                });
+                
+                const result = await response.json();
+                if (result.success) {
+                    if (result.needPassword) {
+                        showMessage('验证码正确，请输入二级密码', 'info');
+                        nextStep();
+                    } else {
+                        showMessage('验证成功！', 'success');
+                        showComplete();
+                    }
+                } else {
+                    showMessage(result.message || '验证码错误', 'error');
+                }
+            } catch (error) {
+                showMessage('网络错误: ' + error.message, 'error');
+            }
+        }
+        
+        async function submitPassword() {
+            const password = document.getElementById('password').value.trim();
+            
+            if (!password) {
+                showMessage('请输入密码', 'error');
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/telegram/auth/password', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ password: password })
+                });
+                
+                const result = await response.json();
+                if (result.success) {
+                    showMessage('验证成功！', 'success');
+                    showComplete();
+                } else {
+                    showMessage(result.message || '密码错误', 'error');
+                }
+            } catch (error) {
+                showMessage('网络错误: ' + error.message, 'error');
+            }
+        }
+        
+        async function skipPassword() {
+            showMessage('已跳过二级密码验证', 'info');
+            showComplete();
+        }
+        
+        // 回车键提交
+        document.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                const activeStep = document.querySelector('.form-step.active');
+                const button = activeStep.querySelector('.btn:not(.btn-secondary)');
+                if (button) {
+                    button.click();
+                }
+            }
+        });
+        
+        // 检查当前授权状态并跳转到正确步骤
+        async function checkCurrentStatus() {
+            try {
+                const response = await fetch('/api/telegram/status');
+                const status = await response.text();
+                
+                if (status.includes('AuthorizationStateWaitCode')) {
+                    // 如果已经在等待验证码，跳转到验证码步骤
+                    currentStep = 3;
+                    showMessage('检测到已发送验证码，请输入验证码', 'info');
+                } else if (status.includes('AuthorizationStateWaitPassword')) {
+                    // 如果在等待密码，跳转到密码步骤
+                    currentStep = 4;
+                    showMessage('检测到需要输入二级密码', 'info');
+                } else if (status.includes('AuthorizationStateReady')) {
+                    // 如果已经授权完成
+                    showComplete();
+                    return;
+                } else if (status.includes('AuthorizationStateWaitPhoneNumber')) {
+                    // 如果在等待手机号，跳转到手机号步骤
+                    currentStep = 2;
+                }
+                
+                updateStepIndicator();
+            } catch (error) {
+                console.log('无法获取状态，从第一步开始');
+                updateStepIndicator();
+            }
+        }
+        
+        // 页面加载时初始化
+         window.onload = function() {
+             checkCurrentStatus();
+         };
+    </script>
+</body>
+</html>

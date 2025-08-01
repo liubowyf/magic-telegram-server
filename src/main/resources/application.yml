@@ -1,0 +1,43 @@
+# Spring Boot 应用配置
+spring:
+  application:
+    name: magic-telegram-server
+  
+  # 日志配置
+  logging:
+    level:
+      com.telegram.server: INFO
+      it.tdlight: INFO
+      root: INFO
+    pattern:
+      console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+      file: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+    file:
+      name: logs/telegram-server.log
+      max-size: 10MB
+      max-history: 30
+
+# 服务器配置
+server:
+  port: 8080
+  servlet:
+    context-path: /api
+
+# Telegram配置
+telegram:
+  session-path: telegram-session
+  proxy:
+    enabled: true
+    host: 127.0.0.1
+    port: 7890
+    type: socks5
+
+# 管理端点配置
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: when-authorized
