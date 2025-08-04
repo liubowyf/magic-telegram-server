@@ -781,6 +781,9 @@ public class MultiAccountTelegramService {
             account.setStatus(TelegramAccount.AccountStatus.READY);
             account.setAuthorizationInProgress(false);
             logger.info("账号 {} 授权完成，开始监听消息", accountId);
+            
+            // 初始化消息接收功能，确保能接收所有聊天的消息
+            initializeMessageReceiving(accountId);
         } else if (update.authorizationState instanceof TdApi.AuthorizationStateWaitPhoneNumber) {
             logger.info("账号 {} 等待手机号", accountId);
             account.setStatus(TelegramAccount.AccountStatus.WAIT_PHONE_NUMBER);
@@ -826,6 +829,97 @@ public class MultiAccountTelegramService {
         TelegramAccount account = accounts.get(accountId);
         if (account != null) {
             logger.info("账号 {} 连接状态: {}", accountId, update.state.getClass().getSimpleName());
+        }
+    }
+
+    /**
+     * 初始化消息接收功能
+     * 
+     * 在客户端授权成功后调用，用于激活实时消息接收功能。
+     * 通过获取聊天列表和设置相关选项来确保能够接收到所有新消息，
+     * 包括那些在手机客户端中未"打开"的群组和聊天。
+     * 
+     * 执行的操作：
+     * 1. 获取主聊天列表以激活消息接收
+     * 2. 获取归档聊天列表
+     * 3. 设置在线状态为true
+     * 4. 启用消息数据库同步
+     * 5. 启用文件数据库
+     * 
+     * 注意：此方法必须在授权完成后调用，否则可能无法正常接收消息。
+     * 
+     * @param accountId 账号ID
+     */
+    private void initializeMessageReceiving(String accountId) {
+        TelegramAccount account = accounts.get(accountId);
+        if (account == null || account.getClient() == null) {
+            logger.error("账号 {} 不存在或客户端未初始化", accountId);
+            return;
+        }
+        
+        SimpleTelegramClient client = account.getClient();
+        
+        try {
+            // 获取主聊天列表以激活消息接收
+            TdApi.GetChats getMainChats = new TdApi.GetChats(new TdApi.ChatListMain(), 100);
+            client.send(getMainChats, result -> {
+                if (result.isError()) {
+                    logger.error("账号 {} 获取主聊天列表失败: {}", accountId, result.getError().message);
+                } else {
+                    logger.info("账号 {} 主聊天列表获取成功", accountId);
+                }
+            });
+            
+            // 获取归档聊天列表
+            TdApi.GetChats getArchivedChats = new TdApi.GetChats(new TdApi.ChatListArchive(), 100);
+            client.send(getArchivedChats, result -> {
+                if (result.isError()) {
+                    logger.warn("账号 {} 获取归档聊天列表失败: {}", accountId, result.getError().message);
+                } else {
+                    logger.info("账号 {} 归档聊天列表获取成功", accountId);
+                }
+            });
+            
+            // 设置在线状态
+            client.send(new TdApi.SetOption("online", new TdApi.OptionValueBoolean(true)), result -> {
+                if (result.isError()) {
+                    logger.warn("账号 {} 设置在线状态失败: {}", accountId, result.getError().message);
+                } else {
+                    logger.debug("账号 {} 在线状态设置成功", accountId);
+                }
+            });
+            
+            // 启用消息数据库同步
+            client.send(new TdApi.SetOption("use_message_database", new TdApi.OptionValueBoolean(true)), result -> {
+                if (result.isError()) {
+                    logger.warn("账号 {} 启用消息数据库失败: {}", accountId, result.getError().message);
+                } else {
+                    logger.debug("账号 {} 消息数据库启用成功", accountId);
+                }
+            });
+            
+            // 启用文件数据库
+            client.send(new TdApi.SetOption("use_file_database", new TdApi.OptionValueBoolean(true)), result -> {
+                if (result.isError()) {
+                    logger.warn("账号 {} 启用文件数据库失败: {}", accountId, result.getError().message);
+                } else {
+                    logger.debug("账号 {} 文件数据库启用成功", accountId);
+                }
+            });
+            
+            // 启用聊天信息数据库
+            client.send(new TdApi.SetOption("use_chat_info_database", new TdApi.OptionValueBoolean(true)), result -> {
+                if (result.isError()) {
+                    logger.warn("账号 {} 启用聊天信息数据库失败: {}", accountId, result.getError().message);
+                } else {
+                    logger.debug("账号 {} 聊天信息数据库启用成功", accountId);
+                }
+            });
+            
+            logger.info("账号 {} 消息接收初始化完成，现在应该能接收所有聊天的消息", accountId);
+            
+        } catch (Exception e) {
+            logger.error("账号 {} 初始化消息接收失败", accountId, e);
         }
     }
 
