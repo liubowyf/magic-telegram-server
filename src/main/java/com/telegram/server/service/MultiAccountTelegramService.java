@@ -737,7 +737,8 @@ public class MultiAccountTelegramService {
             TdApi.Message message = update.message;
             String messageText = getMessageText(message.content);
             
-            if (messageText != null && !messageText.trim().isEmpty()) {
+            // 处理所有类型的消息，不仅仅是文本消息
+            if (messageText != null) {
                 // 创建消息JSON对象
                 ObjectNode messageJson = objectMapper.createObjectNode();
                 messageJson.put("accountId", accountId);
@@ -746,6 +747,9 @@ public class MultiAccountTelegramService {
                 messageJson.put("chatId", message.chatId);
                 messageJson.put("text", messageText);
                 messageJson.put("timestamp", LocalDateTime.now().format(dateTimeFormatter));
+                
+                // 添加消息类型和详细信息
+                addMessageTypeAndDetails(messageJson, message.content);
                 
                 // 添加发送者信息
                 if (message.senderId instanceof TdApi.MessageSenderUser) {
@@ -920,6 +924,138 @@ public class MultiAccountTelegramService {
             
         } catch (Exception e) {
             logger.error("账号 {} 初始化消息接收失败", accountId, e);
+        }
+    }
+
+    /**
+     * 添加消息类型和详细信息
+     * 
+     * 为消息JSON对象添加消息类型、文件信息等详细数据，
+     * 特别针对图片、视频、文档等媒体消息提供完整的元数据。
+     * 
+     * @param messageJson 消息JSON对象
+     * @param content 消息内容
+     */
+    private void addMessageTypeAndDetails(ObjectNode messageJson, TdApi.MessageContent content) {
+        if (content instanceof TdApi.MessageText) {
+            messageJson.put("messageType", "text");
+        } else if (content instanceof TdApi.MessagePhoto) {
+            TdApi.MessagePhoto photoMessage = (TdApi.MessagePhoto) content;
+            messageJson.put("messageType", "photo");
+            
+            // 添加图片详细信息
+            ObjectNode photoInfo = objectMapper.createObjectNode();
+            if (photoMessage.caption != null && !photoMessage.caption.text.isEmpty()) {
+                photoInfo.put("caption", photoMessage.caption.text);
+            }
+            
+            // 获取最大尺寸的图片信息
+            if (photoMessage.photo.sizes.length > 0) {
+                TdApi.PhotoSize largestPhoto = photoMessage.photo.sizes[photoMessage.photo.sizes.length - 1];
+                photoInfo.put("width", largestPhoto.width);
+                photoInfo.put("height", largestPhoto.height);
+                photoInfo.put("fileId", largestPhoto.photo.id);
+                photoInfo.put("fileSize", largestPhoto.photo.size);
+                
+                // 如果有本地路径，添加本地路径信息
+                if (largestPhoto.photo.local != null && largestPhoto.photo.local.path != null && !largestPhoto.photo.local.path.isEmpty()) {
+                    photoInfo.put("localPath", largestPhoto.photo.local.path);
+                }
+                
+                // 如果有远程路径，添加远程路径信息
+                if (largestPhoto.photo.remote != null && largestPhoto.photo.remote.id != null && !largestPhoto.photo.remote.id.isEmpty()) {
+                    photoInfo.put("remoteId", largestPhoto.photo.remote.id);
+                }
+            }
+            
+            messageJson.set("photoInfo", photoInfo);
+        } else if (content instanceof TdApi.MessageVideo) {
+            TdApi.MessageVideo videoMessage = (TdApi.MessageVideo) content;
+            messageJson.put("messageType", "video");
+            
+            ObjectNode videoInfo = objectMapper.createObjectNode();
+            if (videoMessage.caption != null && !videoMessage.caption.text.isEmpty()) {
+                videoInfo.put("caption", videoMessage.caption.text);
+            }
+            videoInfo.put("duration", videoMessage.video.duration);
+            videoInfo.put("width", videoMessage.video.width);
+            videoInfo.put("height", videoMessage.video.height);
+            videoInfo.put("fileId", videoMessage.video.video.id);
+            videoInfo.put("fileSize", videoMessage.video.video.size);
+            
+            messageJson.set("videoInfo", videoInfo);
+        } else if (content instanceof TdApi.MessageDocument) {
+            TdApi.MessageDocument docMessage = (TdApi.MessageDocument) content;
+            messageJson.put("messageType", "document");
+            
+            ObjectNode docInfo = objectMapper.createObjectNode();
+            if (docMessage.caption != null && !docMessage.caption.text.isEmpty()) {
+                docInfo.put("caption", docMessage.caption.text);
+            }
+            docInfo.put("fileName", docMessage.document.fileName);
+            docInfo.put("mimeType", docMessage.document.mimeType);
+            docInfo.put("fileId", docMessage.document.document.id);
+            docInfo.put("fileSize", docMessage.document.document.size);
+            
+            messageJson.set("documentInfo", docInfo);
+        } else if (content instanceof TdApi.MessageSticker) {
+            TdApi.MessageSticker stickerMessage = (TdApi.MessageSticker) content;
+            messageJson.put("messageType", "sticker");
+            
+            ObjectNode stickerInfo = objectMapper.createObjectNode();
+            stickerInfo.put("emoji", stickerMessage.sticker.emoji);
+            stickerInfo.put("width", stickerMessage.sticker.width);
+            stickerInfo.put("height", stickerMessage.sticker.height);
+            stickerInfo.put("fileId", stickerMessage.sticker.sticker.id);
+            
+            messageJson.set("stickerInfo", stickerInfo);
+        } else if (content instanceof TdApi.MessageAnimation) {
+            TdApi.MessageAnimation animMessage = (TdApi.MessageAnimation) content;
+            messageJson.put("messageType", "animation");
+            
+            ObjectNode animInfo = objectMapper.createObjectNode();
+            if (animMessage.caption != null && !animMessage.caption.text.isEmpty()) {
+                animInfo.put("caption", animMessage.caption.text);
+            }
+            animInfo.put("duration", animMessage.animation.duration);
+            animInfo.put("width", animMessage.animation.width);
+            animInfo.put("height", animMessage.animation.height);
+            animInfo.put("fileId", animMessage.animation.animation.id);
+            animInfo.put("fileSize", animMessage.animation.animation.size);
+            
+            messageJson.set("animationInfo", animInfo);
+        } else if (content instanceof TdApi.MessageVoiceNote) {
+            TdApi.MessageVoiceNote voiceMessage = (TdApi.MessageVoiceNote) content;
+            messageJson.put("messageType", "voice");
+            
+            ObjectNode voiceInfo = objectMapper.createObjectNode();
+            if (voiceMessage.caption != null && !voiceMessage.caption.text.isEmpty()) {
+                voiceInfo.put("caption", voiceMessage.caption.text);
+            }
+            voiceInfo.put("duration", voiceMessage.voiceNote.duration);
+            voiceInfo.put("fileId", voiceMessage.voiceNote.voice.id);
+            voiceInfo.put("fileSize", voiceMessage.voiceNote.voice.size);
+            
+            messageJson.set("voiceInfo", voiceInfo);
+        } else if (content instanceof TdApi.MessageAudio) {
+            TdApi.MessageAudio audioMessage = (TdApi.MessageAudio) content;
+            messageJson.put("messageType", "audio");
+            
+            ObjectNode audioInfo = objectMapper.createObjectNode();
+            if (audioMessage.caption != null && !audioMessage.caption.text.isEmpty()) {
+                audioInfo.put("caption", audioMessage.caption.text);
+            }
+            audioInfo.put("duration", audioMessage.audio.duration);
+            audioInfo.put("title", audioMessage.audio.title);
+            audioInfo.put("performer", audioMessage.audio.performer);
+            audioInfo.put("fileName", audioMessage.audio.fileName);
+            audioInfo.put("mimeType", audioMessage.audio.mimeType);
+            audioInfo.put("fileId", audioMessage.audio.audio.id);
+            audioInfo.put("fileSize", audioMessage.audio.audio.size);
+            
+            messageJson.set("audioInfo", audioInfo);
+        } else {
+            messageJson.put("messageType", "unknown");
         }
     }
 
