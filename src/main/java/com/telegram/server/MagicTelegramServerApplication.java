@@ -19,7 +19,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
  * 
  * @author liubo
  * @version 1.0.0
- * @since 2024-12-19
+ * @since 2025.08.01
  */
 @SpringBootApplication
 public class MagicTelegramServerApplication implements CommandLineRunner {

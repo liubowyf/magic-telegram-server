@@ -23,7 +23,7 @@ import java.util.Map;
  * 
  * @author liubo
  * @version 1.0.0
- * @since 2024-12-19
+ * @since 2025.08.01
  * @see com.telegram.server.controller.MultiAccountController
  */
 @RestController

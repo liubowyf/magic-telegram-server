@@ -68,7 +68,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
  * 
  * @author liubo
  * @version 1.0
- * @since 2024-12-19
+ * @since 2025.08.01
  */
 @Service
 public class MultiAccountTelegramService {

@@ -49,9 +49,9 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
  * 4. 如需要，提交两步验证密码
  * 5. 完成认证，开始消息监听
  * 
- * @author Magic Telegram Server
+ * @author liubo
  * @version 1.0
- * @since 2024
+ * @since 2025.08.01
  */
 @Service
 public class TelegramService {

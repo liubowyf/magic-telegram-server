@@ -27,9 +27,9 @@ import java.util.Map;
  * API路径前缀：/multi-telegram
  * 支持跨域访问，适用于前端Web应用调用
  * 
- * @author Magic Telegram Server
+ * @author liubo
  * @version 1.0
- * @since 2024
+ * @since 2025.08.01
  */
 @RestController
 @RequestMapping("/multi-telegram")

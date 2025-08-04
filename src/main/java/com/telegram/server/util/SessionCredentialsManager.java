@@ -40,9 +40,9 @@ import java.util.Map;
  * - 凭据文件和密钥文件分离存储
  * - 支持密钥自动生成和重用
  * 
- * @author Magic Telegram Server
+ * @author liubo
  * @version 1.0
- * @since 2024
+ * @since 2025.08.01
  */
 @Component
 public class SessionCredentialsManager {
