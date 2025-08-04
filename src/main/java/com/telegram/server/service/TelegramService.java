@@ -28,44 +28,128 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
 /**
- * Telegram消息监听服务
- * 负责初始化TDLight客户端并监听Telegram群消息
+ * 单账号Telegram服务类
  * 
- * @author liubo
- * @date 2024-12-19 15:30:00
+ * 提供单个Telegram账号的完整管理功能，包括客户端初始化、认证流程、
+ * 消息监听和状态管理。这是系统的核心服务类，负责与Telegram服务器
+ * 的所有通信和交互。
+ * 
+ * 主要功能：
+ * - TDLight客户端初始化和配置
+ * - Telegram账号认证流程（手机号、验证码、密码）
+ * - 实时消息接收和处理
+ * - 代理服务器配置（SOCKS5）
+ * - 连接状态监控和管理
+ * - Session数据持久化
+ * 
+ * 认证流程：
+ * 1. 配置API ID和API Hash
+ * 2. 提交手机号码
+ * 3. 提交短信验证码
+ * 4. 如需要，提交两步验证密码
+ * 5. 完成认证，开始消息监听
+ * 
+ * @author Magic Telegram Server
+ * @version 1.0
+ * @since 2024
  */
 @Service
 public class TelegramService {
 
+    /**
+     * 日志记录器
+     * 用于记录服务运行日志，便于调试和监控
+     */
     private static final Logger logger = LoggerFactory.getLogger(TelegramService.class);
+    
+    /**
+     * JSON对象映射器
+     * 用于处理消息的JSON序列化和反序列化
+     */
     private static final ObjectMapper objectMapper = new ObjectMapper();
+    
+    /**
+     * 日期时间格式化器
+     * 统一的时间格式，用于消息时间戳格式化
+     */
     private static final DateTimeFormatter dateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
+    /**
+     * 配置文件中的API ID
+     * 从application.properties或application.yml中读取
+     */
     @Value("${telegram.api.id:}")
     private Integer apiId;
 
+    /**
+     * 配置文件中的API Hash
+     * 从application.properties或application.yml中读取
+     */
     @Value("${telegram.api.hash:}")
     private String apiHash;
 
+    /**
+     * 配置文件中的手机号码
+     * 从application.properties或application.yml中读取
+     */
     @Value("${telegram.phone.number:}")
     private String phoneNumber;
     
-    // 运行时配置的API信息
+    /**
+     * 运行时动态配置的API ID
+     * 通过REST API接口动态设置，优先级高于配置文件
+     */
     private Integer runtimeApiId;
+    
+    /**
+     * 运行时动态配置的API Hash
+     * 通过REST API接口动态设置，优先级高于配置文件
+     */
     private String runtimeApiHash;
+    
+    /**
+     * 运行时动态配置的手机号码
+     * 通过REST API接口动态设置，优先级高于配置文件
+     */
     private String runtimePhoneNumber;
 
+    /**
+     * Telegram会话数据存储路径
+     * 用于保存数据库文件和下载文件
+     */
     @Value("${telegram.session.path:./telegram-session}")
     private String sessionPath;
 
+    /**
+     * SOCKS5代理服务器主机地址
+     * 用于网络代理连接
+     */
     @Value("${proxy.socks5.host:127.0.0.1}")
     private String proxyHost;
 
+    /**
+     * SOCKS5代理服务器端口
+     * 用于网络代理连接
+     */
     @Value("${proxy.socks5.port:7890}")
     private int proxyPort;
 
+    /**
+     * Telegram客户端工厂
+     * 用于创建和管理Telegram客户端实例
+     */
     private SimpleTelegramClientFactory clientFactory;
+    
+    /**
+     * Telegram客户端实例
+     * 核心的Telegram通信客户端
+     */
     private SimpleTelegramClient client;
+    
+    /**
+     * 当前授权状态
+     * 跟踪Telegram账号的认证状态
+     */
     private TdApi.AuthorizationState currentAuthState;
 
     /**
@@ -98,7 +182,14 @@ public class TelegramService {
     }
 
     /**
-     * 配置SOCKS5代理
+     * 配置SOCKS5代理服务器
+     * 
+     * 为Telegram客户端配置SOCKS5代理，用于网络连接。
+     * 代理配置将应用于所有的Telegram网络请求。
+     * 
+     * 配置参数从application.properties中读取：
+     * - proxy.socks5.host: 代理服务器地址
+     * - proxy.socks5.port: 代理服务器端口
      */
     private void configureProxy() {
         try {
@@ -124,12 +215,19 @@ public class TelegramService {
     }
 
     /**
-     * 处理新消息
-     * @param update 消息更新
-     */
-    /**
-     * 处理新消息更新
-     * @param update 新消息更新
+     * 处理新消息更新事件
+     * 
+     * 当接收到新的Telegram消息时，此方法会被自动调用。
+     * 方法会解析消息内容，获取聊天信息，并生成详细的JSON格式输出。
+     * 
+     * 处理流程：
+     * 1. 提取消息基本信息（ID、聊天ID、发送时间等）
+     * 2. 异步获取聊天详细信息（群组名称、类型等）
+     * 3. 解析消息内容和类型
+     * 4. 生成完整的JSON格式消息对象
+     * 5. 输出到日志和控制台
+     * 
+     * @param update 新消息更新事件，包含完整的消息信息
      */
     private void handleNewMessage(TdApi.UpdateNewMessage update) {
         try {
@@ -298,8 +396,19 @@ public class TelegramService {
     }
 
     /**
-     * 处理授权状态更新
-     * @param update 授权状态更新
+     * 处理授权状态更新事件
+     * 
+     * 监听Telegram客户端的授权状态变化，根据不同状态执行相应操作。
+     * 这是认证流程的核心处理方法，负责引导用户完成整个登录过程。
+     * 
+     * 支持的授权状态：
+     * - AuthorizationStateReady: 授权完成，开始消息监听
+     * - AuthorizationStateWaitPhoneNumber: 等待手机号输入
+     * - AuthorizationStateWaitCode: 等待验证码输入
+     * - AuthorizationStateWaitPassword: 等待两步验证密码
+     * - AuthorizationStateClosed/Closing: 客户端关闭状态
+     * 
+     * @param update 授权状态更新事件，包含新的授权状态信息
      */
     private void handleAuthorizationState(TdApi.UpdateAuthorizationState update) {
         TdApi.AuthorizationState authState = update.authorizationState;
@@ -352,8 +461,18 @@ public class TelegramService {
     }
 
     /**
-     * 初始化消息接收
-     * 获取聊天列表并设置必要的配置以确保实时接收消息
+     * 初始化消息接收功能
+     * 
+     * 在客户端授权成功后调用，用于激活实时消息接收功能。
+     * 通过获取聊天列表和设置相关选项来确保能够接收到所有新消息。
+     * 
+     * 执行的操作：
+     * 1. 获取聊天列表以激活消息接收
+     * 2. 设置在线状态为true
+     * 3. 启用消息数据库同步
+     * 4. 配置其他必要的接收选项
+     * 
+     * 注意：此方法必须在授权完成后调用，否则可能无法正常接收消息。
      */
     private void initializeMessageReceiving() {
         try {
@@ -390,11 +509,21 @@ public class TelegramService {
     }
 
     /**
-     * 配置API信息（仅在需要时重新初始化客户端）
+     * 动态配置Telegram API信息
      * 
-     * @param appId API ID
-     * @param appHash API Hash
-     * @return 是否配置成功
+     * 允许在运行时动态设置Telegram API ID和API Hash。
+     * 如果客户端已经授权成功，则不会重新初始化；
+     * 如果配置未变更，也不会重新初始化客户端。
+     * 只有在必要时才会重新创建客户端实例。
+     * 
+     * 使用场景：
+     * - 首次配置API信息
+     * - 更换API凭据
+     * - 修复配置错误
+     * 
+     * @param appId Telegram API ID，从https://my.telegram.org获取
+     * @param appHash Telegram API Hash，从https://my.telegram.org获取
+     * @return true表示配置成功，false表示配置失败
      */
     public boolean configApi(int appId, String appHash) {
         try {
@@ -426,10 +555,21 @@ public class TelegramService {
     }
     
     /**
-     * 提交手机号
+     * 提交手机号码进行认证
      * 
-     * @param phoneNumber 手机号
-     * @return 是否提交成功
+     * 在Telegram认证流程中提交手机号码。这是认证的第一步，
+     * 提交后Telegram会向该手机号发送短信验证码。
+     * 
+     * 前置条件：
+     * - 客户端必须已经初始化
+     * - 当前授权状态应为等待手机号
+     * 
+     * 后续步骤：
+     * - 等待接收短信验证码
+     * - 调用submitAuthCode()提交验证码
+     * 
+     * @param phoneNumber 手机号码，格式如：+8613800138000
+     * @return true表示提交成功，false表示提交失败
      */
     public boolean submitPhoneNumber(String phoneNumber) {
         try {
@@ -542,9 +682,23 @@ public class TelegramService {
     }
     
     /**
-     * 提交验证码
-     * @param code 验证码
-     * @return 提交结果，包含成功状态和是否需要密码
+     * 提交短信验证码
+     * 
+     * 提交从Telegram收到的短信验证码以完成认证。
+     * 这是认证流程的第二步，验证码通常为5-6位数字。
+     * 
+     * 可能的结果：
+     * 1. 验证成功，直接完成授权
+     * 2. 验证成功，但需要输入两步验证密码
+     * 3. 验证码错误或其他错误
+     * 
+     * 返回的Map包含以下字段：
+     * - success: 是否成功
+     * - message: 结果消息
+     * - needPassword: 是否需要输入密码
+     * 
+     * @param code 短信验证码，通常为5-6位数字
+     * @return 包含提交结果的Map对象
      */
     public Map<String, Object> submitAuthCode(String code) {
         Map<String, Object> result = new HashMap<>();
@@ -589,9 +743,22 @@ public class TelegramService {
     }
     
     /**
-     * 提交密码（两步验证）
-     * @param password 密码
-     * @return 是否提交成功
+     * 提交两步验证密码
+     * 
+     * 如果Telegram账号启用了两步验证（2FA），在验证码验证成功后
+     * 还需要提交两步验证密码才能完成最终的授权。
+     * 
+     * 前置条件：
+     * - 短信验证码已验证成功
+     * - 当前授权状态为等待密码
+     * - 账号必须已启用两步验证
+     * 
+     * 注意事项：
+     * - 密码错误可能导致账号被临时锁定
+     * - 建议在UI中提供密码可见性切换
+     * 
+     * @param password 两步验证密码，用户设置的安全密码
+     * @return true表示提交成功，false表示提交失败或当前状态不需要密码
      */
     public boolean submitPassword(String password) {
         try {
@@ -663,7 +830,22 @@ public class TelegramService {
     /**
      * 获取详细的授权状态信息
      * 
-     * @return 授权状态详情
+     * 返回当前Telegram客户端的详细授权状态，包括：
+     * - 当前状态类型和描述
+     * - 下一步操作指引
+     * - 各种状态标志位
+     * - 时间戳信息
+     * 
+     * 返回的Map包含以下字段：
+     * - success: 操作是否成功
+     * - status: 状态代码（READY、WAIT_PHONE、WAIT_CODE等）
+     * - message: 状态描述信息
+     * - needsConfig/needsPhone/needsCode/needsPassword: 各种需求标志
+     * - isReady: 是否已就绪
+     * - nextStep: 下一步操作建议
+     * - timestamp: 状态获取时间戳
+     * 
+     * @return 包含详细授权状态信息的Map对象
      */
     public Map<String, Object> getAuthStatus() {
         Map<String, Object> status = new HashMap<>();

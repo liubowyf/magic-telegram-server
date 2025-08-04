@@ -10,22 +10,40 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * Telegram服务REST控制器
+ * 单账号Telegram控制器
+ * 
+ * 提供单账号Telegram相关的REST API接口，包括：
+ * 1. 服务状态查询
+ * 2. 健康检查
+ * 3. API配置
+ * 4. 账号认证流程（手机号、验证码、密码）
+ * 5. 认证状态查询
+ * 
+ * 注意：此控制器主要用于单账号模式，多账号功能请使用MultiAccountController
  * 
  * @author liubo
- * @date 2024-12-19
+ * @version 1.0.0
+ * @since 2024-12-19
+ * @see com.telegram.server.controller.MultiAccountController
  */
 @RestController
 @RequestMapping("/telegram")
 public class TelegramController {
     
+    /**
+     * 单账号Telegram服务实例
+     * 负责处理单账号的所有Telegram相关操作
+     */
     @Autowired
     private TelegramService telegramService;
     
     /**
-     * 获取服务状态
+     * 获取单账号Telegram服务状态
      * 
-     * @return 服务状态信息
+     * 返回当前单账号Telegram服务的运行状态，包括连接状态、认证状态等信息。
+     * 主要用于监控和调试目的。
+     * 
+     * @return ResponseEntity包含服务状态信息和时间戳
      */
     @GetMapping("/status")
     public ResponseEntity<Map<String, Object>> getStatus() {
@@ -41,7 +59,10 @@ public class TelegramController {
     /**
      * 健康检查接口
      * 
-     * @return 健康状态
+     * 提供服务健康状态检查，用于负载均衡器和监控系统检测服务可用性。
+     * 返回简单的UP状态表示服务正常运行。
+     * 
+     * @return ResponseEntity包含健康状态信息
      */
     @GetMapping("/health")
     public ResponseEntity<Map<String, String>> health() {
@@ -53,10 +74,13 @@ public class TelegramController {
     }
     
     /**
-     * 配置API信息
+     * 配置Telegram API信息
      * 
-     * @param request 包含appId和appHash的请求
-     * @return 配置结果
+     * 设置Telegram API的appId和appHash，这是连接Telegram服务的必要凭证。
+     * 需要在Telegram官网申请获得这些凭证信息。
+     * 
+     * @param request 包含appId和appHash的请求体
+     * @return ResponseEntity包含配置操作的结果信息
      */
     @PostMapping("/config")
     public ResponseEntity<Map<String, Object>> configApi(@RequestBody Map<String, Object> request) {
@@ -87,10 +111,13 @@ public class TelegramController {
     }
     
     /**
-     * 提交手机号
+     * 提交手机号进行认证
      * 
-     * @param request 包含phoneNumber的请求
-     * @return 提交结果
+     * Telegram认证流程的第一步，提交手机号码后系统会向该号码发送验证码。
+     * 手机号格式需要包含国家代码，例如：+8613800138000
+     * 
+     * @param request 包含phoneNumber字段的请求体
+     * @return ResponseEntity包含验证码发送结果
      */
     @PostMapping("/auth/phone")
     public ResponseEntity<Map<String, Object>> submitPhone(@RequestBody Map<String, Object> request) {
@@ -120,10 +147,13 @@ public class TelegramController {
     }
     
     /**
-     * 提交验证码
+     * 提交短信验证码
      * 
-     * @param request 包含code的请求
-     * @return 提交结果
+     * Telegram认证流程的第二步，提交收到的短信验证码进行验证。
+     * 如果账号开启了两步验证，验证码通过后还需要提交密码。
+     * 
+     * @param request 包含code字段的请求体
+     * @return ResponseEntity包含验证码验证结果，可能需要进一步密码验证
      */
     @PostMapping("/auth/code")
     public ResponseEntity<Map<String, Object>> submitCode(@RequestBody Map<String, Object> request) {
@@ -147,10 +177,13 @@ public class TelegramController {
     }
     
     /**
-     * 提交密码（如果需要两步验证）
+     * 提交两步验证密码
      * 
-     * @param request 包含password的请求
-     * @return 提交结果
+     * Telegram认证流程的第三步（可选），当账号开启两步验证时需要提交密码。
+     * 只有在submitCode返回需要密码验证的情况下才需要调用此接口。
+     * 
+     * @param request 包含password字段的请求体
+     * @return ResponseEntity包含密码验证结果
      */
     @PostMapping("/auth/password")
     public ResponseEntity<Map<String, Object>> submitPassword(@RequestBody Map<String, Object> request) {
@@ -180,9 +213,12 @@ public class TelegramController {
     }
     
     /**
-     * 获取当前授权状态
+     * 获取当前认证授权状态
      * 
-     * @return 授权状态信息
+     * 查询当前账号的认证状态，包括是否已登录、认证进度等信息。
+     * 可用于判断是否需要进行认证流程或认证是否已完成。
+     * 
+     * @return ResponseEntity包含详细的认证状态信息
      */
     @GetMapping("/auth/status")
     public ResponseEntity<Map<String, Object>> getAuthStatus() {

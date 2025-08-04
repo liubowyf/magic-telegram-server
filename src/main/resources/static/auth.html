@@ -309,13 +309,48 @@
             }
         }
         
-        function showComplete() {
+        async function showComplete() {
             document.getElementById('form-step-complete').classList.add('active');
             // 隐藏所有步骤
             for (let i = 1; i <= maxSteps; i++) {
                 document.getElementById(`form-step-${i}`).classList.remove('active');
                 document.getElementById(`step-${i}`).classList.add('completed');
                 document.getElementById(`step-${i}`).classList.remove('active');
+            }
+            
+            // 检查是否有待导入的账号昵称
+            const pendingNickname = localStorage.getItem('pendingAccountNickname');
+            if (pendingNickname) {
+                try {
+                     // 导入session到多账号系统
+                     const response = await fetch('/api/multi-telegram/import-legacy-session', {
+                         method: 'POST',
+                         headers: {
+                             'Content-Type': 'application/json'
+                         },
+                         body: JSON.stringify({ nickname: pendingNickname })
+                     });
+                    
+                    const result = await response.json();
+                    if (result.success) {
+                        // 清除待导入的昵称
+                        localStorage.removeItem('pendingAccountNickname');
+                        
+                        // 显示成功消息并提供跳转选项
+                        showMessage('认证完成！Session已导入到多账号系统', 'success');
+                        
+                        // 3秒后自动跳转到多账号页面
+                        setTimeout(() => {
+                            if (confirm('是否跳转到多账号管理页面？')) {
+                                window.location.href = '/multi-account.html';
+                            }
+                        }, 3000);
+                    } else {
+                        showMessage('Session导入失败：' + result.message, 'error');
+                    }
+                } catch (error) {
+                    showMessage('导入Session时发生错误：' + error.message, 'error');
+                }
             }
         }
         

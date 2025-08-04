@@ -1,0 +1,814 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>多账号Telegram管理</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            font-weight: 300;
+        }
+
+        .header p {
+            font-size: 1.1em;
+            opacity: 0.9;
+        }
+
+        .content {
+            padding: 30px;
+        }
+
+        .section {
+            margin-bottom: 40px;
+        }
+
+        .section-title {
+            font-size: 1.5em;
+            color: #333;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #667eea;
+        }
+
+        .create-account {
+            background: #f8f9fa;
+            padding: 25px;
+            border-radius: 15px;
+            margin-bottom: 30px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 500;
+            color: #555;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 12px 15px;
+            border: 2px solid #e1e5e9;
+            border-radius: 10px;
+            font-size: 16px;
+            transition: border-color 0.3s;
+        }
+
+        .form-group input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 25px;
+            border-radius: 10px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 500;
+            transition: transform 0.2s, box-shadow 0.2s;
+            margin-right: 10px;
+            margin-bottom: 10px;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-small {
+            padding: 8px 15px;
+            font-size: 14px;
+        }
+
+        .btn-danger {
+            background: linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%);
+        }
+
+        .btn-success {
+            background: linear-gradient(135deg, #51cf66 0%, #40c057 100%);
+        }
+
+        .btn-warning {
+            background: linear-gradient(135deg, #ffd43b 0%, #fab005 100%);
+        }
+
+        .accounts-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+            gap: 20px;
+        }
+
+        .account-card {
+            background: white;
+            border: 2px solid #e1e5e9;
+            border-radius: 15px;
+            padding: 20px;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .account-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+        }
+
+        .account-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .account-nickname {
+            font-size: 1.3em;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .account-status {
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 500;
+            text-transform: uppercase;
+        }
+
+        .status-ready {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .status-authenticating {
+            background: #fff3cd;
+            color: #856404;
+        }
+
+        .status-error {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .status-created {
+            background: #d1ecf1;
+            color: #0c5460;
+        }
+
+        .account-info {
+            margin-bottom: 15px;
+        }
+
+        .account-info p {
+            margin-bottom: 5px;
+            color: #666;
+        }
+
+        .account-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+        }
+
+        .modal-content {
+            background-color: white;
+            margin: 5% auto;
+            padding: 30px;
+            border-radius: 15px;
+            width: 90%;
+            max-width: 500px;
+            position: relative;
+        }
+
+        .close {
+            position: absolute;
+            right: 15px;
+            top: 15px;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+            color: #aaa;
+        }
+
+        .close:hover {
+            color: #000;
+        }
+
+        .message {
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            font-weight: 500;
+        }
+
+        .message.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .message.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        @media (max-width: 768px) {
+            .accounts-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .header h1 {
+                font-size: 2em;
+            }
+            
+            .content {
+                padding: 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🚀 多账号Telegram管理</h1>
+            <p>轻松管理多个Telegram账号，实现同时监听多个账号的消息</p>
+        </div>
+
+        <div class="content">
+            <!-- 创建账号区域 -->
+            <div class="section">
+                <h2 class="section-title">📱 创建新账号</h2>
+                <div class="create-account">
+                    <div class="form-group">
+                        <label for="nickname">账号昵称</label>
+                        <input type="text" id="nickname" placeholder="请输入账号昵称，例如：工作账号、个人账号等">
+                    </div>
+                    <button class="btn" onclick="createAccountWithAuth()">创建并认证账号</button>
+                    <button class="btn btn-success" onclick="importLegacySession()">导入单账户Session</button>
+                    <button class="btn btn-warning" onclick="enableAllListening()">开启所有账号监听</button>
+                </div>
+            </div>
+
+            <!-- 账号列表区域 -->
+            <div class="section">
+                <h2 class="section-title">📋 账号列表</h2>
+                <div class="accounts-grid" id="accountsGrid">
+                    <!-- 账号卡片将在这里动态生成 -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 配置API模态框 -->
+    <div id="configModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeModal('configModal')">&times;</span>
+            <h3>配置API信息</h3>
+            <div class="form-group">
+                <label for="appId">API ID</label>
+                <input type="number" id="appId" placeholder="请输入API ID">
+            </div>
+            <div class="form-group">
+                <label for="appHash">API Hash</label>
+                <input type="text" id="appHash" placeholder="请输入API Hash">
+            </div>
+            <button class="btn" onclick="submitConfig()">提交配置</button>
+        </div>
+    </div>
+
+    <!-- 手机号模态框 -->
+    <div id="phoneModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeModal('phoneModal')">&times;</span>
+            <h3>输入手机号</h3>
+            <div class="form-group">
+                <label for="phoneNumber">手机号</label>
+                <input type="text" id="phoneNumber" placeholder="请输入手机号，例如：+8613800138000">
+            </div>
+            <button class="btn" onclick="submitPhone()">提交手机号</button>
+        </div>
+    </div>
+
+    <!-- 验证码模态框 -->
+    <div id="codeModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeModal('codeModal')">&times;</span>
+            <h3>输入验证码</h3>
+            <div class="form-group">
+                <label for="authCode">验证码</label>
+                <input type="text" id="authCode" placeholder="请输入收到的验证码">
+            </div>
+            <button class="btn" onclick="submitCode()">提交验证码</button>
+        </div>
+    </div>
+
+    <!-- 密码模态框 -->
+    <div id="passwordModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeModal('passwordModal')">&times;</span>
+            <h3>输入密码</h3>
+            <div class="form-group">
+                <label for="password">密码</label>
+                <input type="password" id="password" placeholder="请输入两步验证密码">
+            </div>
+            <button class="btn" onclick="submitPassword()">提交密码</button>
+        </div>
+    </div>
+
+    <script>
+        let currentAccountId = null;
+
+        // 页面加载时获取账号列表
+        document.addEventListener('DOMContentLoaded', function() {
+            loadAccounts();
+            // 每30秒刷新一次账号状态
+            setInterval(loadAccounts, 30000);
+        });
+
+        // 创建并认证账号
+        function createAccountWithAuth() {
+            const nickname = document.getElementById('nickname').value.trim();
+            if (!nickname) {
+                showMessage('请输入账号昵称', 'error');
+                return;
+            }
+
+            // 将昵称保存到localStorage，以便在认证完成后使用
+            localStorage.setItem('pendingAccountNickname', nickname);
+            
+            // 跳转到单账号认证页面
+            showMessage('正在跳转到认证页面...', 'info');
+            window.open('/api/auth.html', '_blank');
+        }
+
+        // 导入单账户Session
+        async function importLegacySession() {
+            try {
+                showMessage('正在导入单账户Session...', 'info');
+                
+                const response = await fetch('/api/multi-telegram/import-legacy-session', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                const result = await response.json();
+                if (result.success) {
+                    showMessage(result.message, 'success');
+                    loadAccounts(); // 刷新账号列表
+                } else {
+                    showMessage(result.message, 'error');
+                }
+            } catch (error) {
+                showMessage('导入单账户Session失败：' + error.message, 'error');
+            }
+        }
+
+        // 开启所有账号监听
+        async function enableAllListening() {
+            try {
+                showMessage('正在开启所有账号监听...', 'info');
+                
+                const response = await fetch('/api/multi-telegram/enable-all-listening', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                const result = await response.json();
+                if (result.success) {
+                    showMessage(result.message, 'success');
+                    loadAccounts(); // 刷新账号列表
+                } else {
+                    showMessage(result.message, 'error');
+                }
+            } catch (error) {
+                showMessage('开启所有账号监听失败：' + error.message, 'error');
+            }
+        }
+
+        // 加载账号列表
+        async function loadAccounts() {
+            try {
+                const response = await fetch('/api/multi-telegram/accounts');
+                const accounts = await response.json();
+                
+                if (response.ok) {
+                    renderAccounts(accounts);
+                } else {
+                    showMessage('加载账号列表失败', 'error');
+                }
+            } catch (error) {
+                showMessage('加载账号列表失败：' + error.message, 'error');
+            }
+        }
+
+        // 渲染账号列表
+        function renderAccounts(accounts) {
+            const grid = document.getElementById('accountsGrid');
+            
+            if (accounts.length === 0) {
+                grid.innerHTML = '<p style="text-align: center; color: #666; grid-column: 1 / -1;">暂无账号，请创建新账号</p>';
+                return;
+            }
+
+            grid.innerHTML = accounts.map(account => `
+                <div class="account-card">
+                    <div class="account-header">
+                        <div class="account-nickname">${account.nickname}</div>
+                        <div class="account-status status-${account.status.toLowerCase()}">${getStatusText(account.status)}</div>
+                    </div>
+                    <div class="account-info">
+                        <p><strong>账号ID:</strong> ${account.accountId}</p>
+                        <p><strong>手机号:</strong> ${account.phoneNumber || '未设置'}</p>
+                        <p><strong>认证状态:</strong> ${account.isAuthenticated ? '✅ 已认证' : '❌ 未认证'}</p>
+                        <p><strong>消息监听:</strong> ${account.listeningEnabled ? '🔊 已启用' : '🔇 已禁用'}</p>
+                        <p><strong>创建时间:</strong> ${account.createTime}</p>
+                    </div>
+                    <div class="account-actions">
+                        ${getActionButtons(account)}
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // 获取状态文本
+        function getStatusText(status) {
+            const statusMap = {
+                'CREATED': '已创建',
+                'CONFIGURING': '配置中',
+                'AUTHENTICATING': '认证中',
+                'READY': '就绪',
+                'LISTENING': '监听中',
+                'ERROR': '错误',
+                'DISABLED': '已禁用'
+            };
+            return statusMap[status] || status;
+        }
+
+        // 获取操作按钮
+        function getActionButtons(account) {
+            let buttons = [];
+            
+            if (account.status === 'CREATED') {
+                buttons.push(`<button class="btn btn-small" onclick="configApi('${account.accountId}')">配置API</button>`);
+            } else if (account.status === 'AUTHENTICATING') {
+                buttons.push(`<button class="btn btn-small" onclick="checkAuthStatus('${account.accountId}')">检查状态</button>`);
+            }
+            
+            if (account.isAuthenticated) {
+                if (account.listeningEnabled) {
+                    buttons.push(`<button class="btn btn-small btn-warning" onclick="toggleListening('${account.accountId}', false)">禁用监听</button>`);
+                } else {
+                    buttons.push(`<button class="btn btn-small btn-success" onclick="toggleListening('${account.accountId}', true)">启用监听</button>`);
+                }
+            }
+            
+            buttons.push(`<button class="btn btn-small btn-danger" onclick="deleteAccount('${account.accountId}')">删除</button>`);
+            
+            return buttons.join('');
+        }
+
+        // 配置API
+        function configApi(accountId) {
+            currentAccountId = accountId;
+            document.getElementById('configModal').style.display = 'block';
+        }
+
+        // 提交API配置
+        async function submitConfig() {
+            console.log('submitConfig函数被调用');
+            console.log('currentAccountId:', currentAccountId);
+            
+            const appIdValue = document.getElementById('appId').value.trim();
+            const appHash = document.getElementById('appHash').value.trim();
+            
+            console.log('appIdValue:', appIdValue, 'appHash:', appHash);
+            
+            const appId = parseInt(appIdValue) || 0;
+
+            try {
+                const response = await fetch(`/api/multi-telegram/accounts/${currentAccountId}/config`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ appId, appHash })
+                });
+
+                const result = await response.json();
+                if (result.success) {
+                    showMessage('API配置成功！', 'success');
+                    closeModal('configModal');
+                    loadAccounts();
+                    // 配置成功后自动弹出手机号输入框
+                    setTimeout(() => {
+                        document.getElementById('phoneModal').style.display = 'block';
+                    }, 1000);
+                } else {
+                    showMessage(result.message, 'error');
+                }
+            } catch (error) {
+                showMessage('配置API失败：' + error.message, 'error');
+            }
+        }
+
+        // 提交手机号
+        async function submitPhone() {
+            const phoneNumber = document.getElementById('phoneNumber').value.trim();
+
+            if (!phoneNumber) {
+                showMessage('请输入手机号', 'error');
+                return;
+            }
+
+            try {
+                // 先检查当前账号的认证状态
+                const statusResponse = await fetch(`/api/multi-telegram/accounts/${currentAccountId}/auth/status`);
+                const statusResult = await statusResponse.json();
+                
+                if (statusResult.authState && statusResult.authState.includes('AuthorizationStateWaitCode')) {
+                    // 如果已经在等待验证码，直接跳转
+                    showMessage('验证码已发送，请输入验证码', 'info');
+                    closeModal('phoneModal');
+                    setTimeout(() => {
+                        document.getElementById('codeModal').style.display = 'block';
+                    }, 500);
+                    return;
+                }
+
+                const response = await fetch(`/api/multi-telegram/accounts/${currentAccountId}/auth/phone`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ phoneNumber })
+                });
+
+                const result = await response.json();
+                if (result.success) {
+                    showMessage('手机号提交成功，请等待验证码！', 'success');
+                    closeModal('phoneModal');
+                    // 自动弹出验证码输入框
+                    setTimeout(() => {
+                        document.getElementById('codeModal').style.display = 'block';
+                    }, 1000);
+                } else {
+                    showMessage(result.message, 'error');
+                }
+            } catch (error) {
+                showMessage('提交手机号失败：' + error.message, 'error');
+            }
+        }
+
+        // 提交验证码
+        async function submitCode() {
+            const code = document.getElementById('authCode').value.trim();
+
+            if (!code) {
+                showMessage('请输入验证码', 'error');
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/multi-telegram/accounts/${currentAccountId}/auth/code`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ code })
+                });
+
+                const result = await response.json();
+                if (result.success) {
+                    showMessage('验证码提交成功！', 'success');
+                    closeModal('codeModal');
+                    loadAccounts();
+                } else {
+                    showMessage(result.message, 'error');
+                    // 如果需要密码，自动弹出密码输入框
+                    if (result.message.includes('密码')) {
+                        closeModal('codeModal');
+                        setTimeout(() => {
+                            document.getElementById('passwordModal').style.display = 'block';
+                        }, 1000);
+                    }
+                }
+            } catch (error) {
+                showMessage('提交验证码失败：' + error.message, 'error');
+            }
+        }
+
+        // 提交密码
+        async function submitPassword() {
+            const password = document.getElementById('password').value;
+
+            try {
+                const response = await fetch(`/api/multi-telegram/accounts/${currentAccountId}/auth/password`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ password })
+                });
+
+                const result = await response.json();
+                if (result.success) {
+                    showMessage('密码提交成功！', 'success');
+                    closeModal('passwordModal');
+                    loadAccounts();
+                } else {
+                    showMessage(result.message, 'error');
+                }
+            } catch (error) {
+                showMessage('提交密码失败：' + error.message, 'error');
+            }
+        }
+
+        // 检查认证状态
+        async function checkAuthStatus(accountId) {
+            try {
+                const response = await fetch(`/api/multi-telegram/accounts/${accountId}/auth/status`);
+                const result = await response.json();
+                
+                if (result.success) {
+                    showMessage(`状态：${result.message}`, 'success');
+                    
+                    // 根据下一步操作自动弹出相应的模态框
+                    currentAccountId = accountId;
+                    if (result.nextStep === 'submitPhone') {
+                        document.getElementById('phoneModal').style.display = 'block';
+                    } else if (result.nextStep === 'submitCode') {
+                        document.getElementById('codeModal').style.display = 'block';
+                    } else if (result.nextStep === 'submitPassword') {
+                        document.getElementById('passwordModal').style.display = 'block';
+                    }
+                    
+                    loadAccounts();
+                } else {
+                    showMessage(result.message, 'error');
+                }
+            } catch (error) {
+                showMessage('检查状态失败：' + error.message, 'error');
+            }
+        }
+
+        // 切换监听状态
+        async function toggleListening(accountId, enabled) {
+            try {
+                const response = await fetch(`/api/multi-telegram/accounts/${accountId}/listening`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ enabled })
+                });
+
+                const result = await response.json();
+                if (result.success) {
+                    showMessage(`监听状态已${enabled ? '启用' : '禁用'}`, 'success');
+                    loadAccounts();
+                } else {
+                    showMessage(result.message, 'error');
+                }
+            } catch (error) {
+                showMessage('更新监听状态失败：' + error.message, 'error');
+            }
+        }
+
+        // 删除账号
+        async function deleteAccount(accountId) {
+            if (!confirm('确定要删除这个账号吗？此操作不可恢复。')) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/multi-telegram/accounts/${accountId}`, {
+                    method: 'DELETE'
+                });
+
+                const result = await response.json();
+                if (result.success) {
+                    showMessage('账号删除成功', 'success');
+                    loadAccounts();
+                } else {
+                    showMessage(result.message, 'error');
+                }
+            } catch (error) {
+                showMessage('删除账号失败：' + error.message, 'error');
+            }
+        }
+
+        // 关闭模态框
+        function closeModal(modalId) {
+            document.getElementById(modalId).style.display = 'none';
+            // 清空表单
+            const modal = document.getElementById(modalId);
+            const inputs = modal.querySelectorAll('input');
+            inputs.forEach(input => input.value = '');
+        }
+
+        // 显示消息
+        function showMessage(message, type) {
+            // 移除现有消息
+            const existingMessage = document.querySelector('.message');
+            if (existingMessage) {
+                existingMessage.remove();
+            }
+
+            // 创建新消息
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${type}`;
+            messageDiv.textContent = message;
+
+            // 插入到内容区域顶部
+            const content = document.querySelector('.content');
+            content.insertBefore(messageDiv, content.firstChild);
+
+            // 3秒后自动移除
+            setTimeout(() => {
+                if (messageDiv.parentNode) {
+                    messageDiv.remove();
+                }
+            }, 3000);
+        }
+
+        // 点击模态框外部关闭
+        window.onclick = function(event) {
+            const modals = document.querySelectorAll('.modal');
+            modals.forEach(modal => {
+                if (event.target === modal) {
+                    modal.style.display = 'none';
+                }
+            });
+        }
+    </script>
+</body>
+</html>
