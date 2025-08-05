@@ -189,34 +189,36 @@ magic-telegram-server/
 # 1. 启动应用
 mvn spring-boot:run
 
+## 1.1 可以通过页面创建账号：http://localhost:8080/api/auth.html
+
 # 2. 创建账户
-curl -X POST http://localhost:8080/telegram/account/create
+curl -X POST http://localhost:8080/api/telegram/account/create
 
 # 3. 配置API（替换为实际的API ID和Hash）
-curl -X POST http://localhost:8080/telegram/config \
+curl -X POST http://localhost:8080/api/telegram/config \
   -H "Content-Type: application/json" \
   -d '{"appId": 12345678, "appHash": "abcdef1234567890abcdef1234567890"}'
 
 # 4. 提交手机号
-curl -X POST http://localhost:8080/telegram/auth/phone \
+curl -X POST http://localhost:8080/api/telegram/auth/phone \
   -H "Content-Type: application/json" \
   -d '{"phoneNumber": "+8613800138000"}'
 
 # 5. 提交验证码（替换为实际收到的验证码）
-curl -X POST http://localhost:8080/telegram/auth/code \
+curl -X POST http://localhost:8080/api/telegram/auth/code \
   -H "Content-Type: application/json" \
   -d '{"code": "12345"}'
 
 # 6. 如需要，提交两步验证密码
-curl -X POST http://localhost:8080/telegram/auth/password \
+curl -X POST http://localhost:8080/api/telegram/auth/password \
   -H "Content-Type: application/json" \
   -d '{"password": "your_password"}'
 
 # 7. 开始消息监听
-curl -X POST http://localhost:8080/telegram/listening/start
+curl -X POST http://localhost:8080/api/telegram/listening/start
 
 # 8. 查看认证状态
-curl http://localhost:8080/telegram/auth/status
+curl http://localhost:8080/api/telegram/auth/status
 ```
 
 ## TODO 列表
@@ -224,7 +226,7 @@ curl http://localhost:8080/telegram/auth/status
 以下是项目的后续开发计划：
 
 - [ ] **多账户管理** - 支持同时管理多个Telegram账户，实现账户间的独立认证和消息监听
-- [ ] **多数据源存储** - 集成多种数据存储方案（MySQL、MongoDB、Redis等），支持消息持久化和历史查询
+- [ ] **多数据源存储** - 集成多种数据存储方案（MySQL、MongoDB、Redis、ES等），支持消息持久化和历史查询
 - [ ] **实时消息分类** - 基于机器学习算法实现消息智能分类，支持自定义分类规则和标签管理
 
 ## 作者
@@ -235,4 +237,20 @@ curl http://localhost:8080/telegram/auth/status
 
 ## 许可证
 
-本项目仅供学习和研究使用。
+本项目基于 [Apache License 2.0](LICENSE) 开源协议发布。
+
+```
+Copyright 2025 liubo
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+```
