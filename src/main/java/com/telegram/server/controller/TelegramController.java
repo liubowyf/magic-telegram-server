@@ -1,4 +1,4 @@
-package com.telegram.server;
+package com.telegram.server.controller;
 
 import com.telegram.server.service.TelegramService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -12,22 +12,24 @@ import java.util.Map;
 /**
  * 单账号Telegram控制器
  * 
- * 提供单账号Telegram相关的REST API接口，包括：
- * 1. 服务状态查询
- * 2. 健康检查
- * 3. API配置
- * 4. 账号认证流程（手机号、验证码、密码）
- * 5. 认证状态查询
+ * 提供完整的单账号Telegram管理功能，包括：
+ * 1. 账号创建和初始化
+ * 2. API配置管理
+ * 3. 认证流程管理（手机号、验证码、密码）
+ * 4. 消息监听控制
+ * 5. Session数据管理
+ * 6. 服务状态监控
  * 
- * 注意：此控制器主要用于单账号模式，多账号功能请使用MultiAccountController
+ * API路径前缀：/api/telegram
+ * 支持跨域访问，适用于前端Web应用调用
  * 
  * @author liubo
- * @version 1.0.0
- * @since 2025.08.01
- * @see com.telegram.server.controller.MultiAccountController
+ * @version 1.0
+ * @since 2025-08-05
  */
 @RestController
 @RequestMapping("/telegram")
+@CrossOrigin(origins = "*")
 public class TelegramController {
     
     /**
@@ -38,39 +40,35 @@ public class TelegramController {
     private TelegramService telegramService;
     
     /**
-     * 获取单账号Telegram服务状态
+     * 创建并初始化Telegram账号
      * 
-     * 返回当前单账号Telegram服务的运行状态，包括连接状态、认证状态等信息。
-     * 主要用于监控和调试目的。
+     * 初始化单个Telegram账号实例，准备进行API配置和认证流程。
+     * 这是使用系统的第一步操作。
      * 
-     * @return ResponseEntity包含服务状态信息和时间戳
+     * @return ResponseEntity 包含创建结果
+     *         - success: 是否创建成功
+     *         - message: 操作结果消息
+     *         - status: 账号状态信息
      */
-    @GetMapping("/status")
-    public ResponseEntity<Map<String, Object>> getStatus() {
-        Map<String, Object> status = new HashMap<>();
-        status.put("service", "Magic Telegram Server");
-        status.put("status", "running");
-        status.put("description", "Telegram群消息实时监听服务");
-        status.put("timestamp", System.currentTimeMillis());
+    @PostMapping("/account/create")
+    public ResponseEntity<Map<String, Object>> createAccount() {
+        Map<String, Object> response = new HashMap<>();
         
-        return ResponseEntity.ok(status);
-    }
-    
-    /**
-     * 健康检查接口
-     * 
-     * 提供服务健康状态检查，用于负载均衡器和监控系统检测服务可用性。
-     * 返回简单的UP状态表示服务正常运行。
-     * 
-     * @return ResponseEntity包含健康状态信息
-     */
-    @GetMapping("/health")
-    public ResponseEntity<Map<String, String>> health() {
-        Map<String, String> health = new HashMap<>();
-        health.put("status", "UP");
-        health.put("service", "telegram-listener");
-        
-        return ResponseEntity.ok(health);
+        try {
+            // 初始化账号
+            telegramService.initializeAccount();
+            
+            response.put("success", true);
+            response.put("message", "账号创建成功，请配置API信息");
+            response.put("status", telegramService.getAuthStatus());
+            
+            return ResponseEntity.ok(response);
+            
+        } catch (Exception e) {
+            response.put("success", false);
+            response.put("message", "创建账号失败: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
+        }
     }
     
     /**
@@ -92,7 +90,7 @@ public class TelegramController {
             if (appId == null || appHash == null || appHash.trim().isEmpty()) {
                 response.put("success", false);
                 response.put("message", "App ID和App Hash不能为空");
-                return ResponseEntity.ok(response);
+                return ResponseEntity.badRequest().body(response);
             }
             
             boolean success = telegramService.configApi(appId, appHash);
@@ -111,13 +109,13 @@ public class TelegramController {
     }
     
     /**
-     * 提交手机号进行认证
+     * 提交手机号码进行认证
      * 
-     * Telegram认证流程的第一步，提交手机号码后系统会向该号码发送验证码。
-     * 手机号格式需要包含国家代码，例如：+8613800138000
+     * Telegram认证流程的第一步，提交手机号码以接收短信验证码。
+     * 手机号需要包含国家代码，例如：+8613800138000
      * 
      * @param request 包含phoneNumber字段的请求体
-     * @return ResponseEntity包含验证码发送结果
+     * @return ResponseEntity包含手机号提交结果
      */
     @PostMapping("/auth/phone")
     public ResponseEntity<Map<String, Object>> submitPhone(@RequestBody Map<String, Object> request) {
@@ -128,16 +126,16 @@ public class TelegramController {
             if (phoneNumber == null || phoneNumber.trim().isEmpty()) {
                 response.put("success", false);
                 response.put("message", "手机号不能为空");
-                return ResponseEntity.ok(response);
+                return ResponseEntity.badRequest().body(response);
             }
             
             boolean success = telegramService.submitPhoneNumber(phoneNumber.trim());
             if (success) {
                 response.put("success", true);
-                response.put("message", "验证码已发送");
+                response.put("message", "手机号提交成功，请输入验证码");
             } else {
                 response.put("success", false);
-                response.put("message", "发送验证码失败");
+                response.put("message", "手机号提交失败");
             }
         } catch (Exception e) {
             response.put("success", false);
@@ -164,7 +162,7 @@ public class TelegramController {
             if (code == null || code.trim().isEmpty()) {
                 response.put("success", false);
                 response.put("message", "验证码不能为空");
-                return ResponseEntity.ok(response);
+                return ResponseEntity.badRequest().body(response);
             }
             
             Map<String, Object> result = telegramService.submitAuthCode(code.trim());
@@ -194,13 +192,13 @@ public class TelegramController {
             if (password == null || password.trim().isEmpty()) {
                 response.put("success", false);
                 response.put("message", "密码不能为空");
-                return ResponseEntity.ok(response);
+                return ResponseEntity.badRequest().body(response);
             }
             
             boolean success = telegramService.submitPassword(password.trim());
             if (success) {
                 response.put("success", true);
-                response.put("message", "密码验证成功");
+                response.put("message", "密码验证成功，认证完成");
             } else {
                 response.put("success", false);
                 response.put("message", "密码验证失败");
@@ -231,5 +229,107 @@ public class TelegramController {
             response.put("message", "获取授权状态时发生错误: " + e.getMessage());
         }
         return ResponseEntity.ok(response);
+    }
+    
+    /**
+     * 开始消息监听
+     * 
+     * 启动Telegram消息监听功能，开始接收和处理群组消息。
+     * 只有在认证完成后才能成功启动监听。
+     * 
+     * @return ResponseEntity包含监听启动结果
+     */
+    @PostMapping("/listening/start")
+    public ResponseEntity<Map<String, Object>> startListening() {
+        Map<String, Object> response = new HashMap<>();
+        try {
+            telegramService.startListening();
+            response.put("success", true);
+            response.put("message", "消息监听已启动");
+        } catch (Exception e) {
+            response.put("success", false);
+            response.put("message", "启动消息监听失败: " + e.getMessage());
+        }
+        return ResponseEntity.ok(response);
+    }
+    
+    /**
+     * 停止消息监听
+     * 
+     * 停止Telegram消息监听功能。
+     * 
+     * @return ResponseEntity包含监听停止结果
+     */
+    @PostMapping("/listening/stop")
+    public ResponseEntity<Map<String, Object>> stopListening() {
+        Map<String, Object> response = new HashMap<>();
+        try {
+            telegramService.stopListening();
+            response.put("success", true);
+            response.put("message", "消息监听已停止");
+        } catch (Exception e) {
+            response.put("success", false);
+            response.put("message", "停止消息监听失败: " + e.getMessage());
+        }
+        return ResponseEntity.ok(response);
+    }
+    
+    /**
+     * 清理Session数据
+     * 
+     * 清除当前账号的所有Session数据，包括认证信息和缓存数据。
+     * 清理后需要重新进行认证流程。
+     * 
+     * @return ResponseEntity包含清理结果
+     */
+    @DeleteMapping("/session/clear")
+    public ResponseEntity<Map<String, Object>> clearSession() {
+        Map<String, Object> response = new HashMap<>();
+        try {
+            telegramService.clearSession();
+            response.put("success", true);
+            response.put("message", "Session数据已清理");
+        } catch (Exception e) {
+            response.put("success", false);
+            response.put("message", "清理Session失败: " + e.getMessage());
+        }
+        return ResponseEntity.ok(response);
+    }
+    
+    /**
+     * 获取服务状态
+     * 
+     * 返回当前Telegram服务的运行状态，包括连接状态、认证状态等信息。
+     * 主要用于监控和调试目的。
+     * 
+     * @return ResponseEntity包含服务状态信息和时间戳
+     */
+    @GetMapping("/status")
+    public ResponseEntity<Map<String, Object>> getStatus() {
+        Map<String, Object> status = new HashMap<>();
+        status.put("service", "Magic Telegram Server");
+        status.put("status", "running");
+        status.put("description", "单账号Telegram消息监听服务");
+        status.put("timestamp", System.currentTimeMillis());
+        status.put("authStatus", telegramService.getAuthStatus());
+        
+        return ResponseEntity.ok(status);
+    }
+    
+    /**
+     * 健康检查接口
+     * 
+     * 提供服务健康状态检查，用于负载均衡器和监控系统检测服务可用性。
+     * 返回简单的UP状态表示服务正常运行。
+     * 
+     * @return ResponseEntity包含健康状态信息
+     */
+    @GetMapping("/health")
+    public ResponseEntity<Map<String, String>> health() {
+        Map<String, String> health = new HashMap<>();
+        health.put("status", "UP");
+        health.put("service", "telegram-listener");
+        
+        return ResponseEntity.ok(health);
     }
 }

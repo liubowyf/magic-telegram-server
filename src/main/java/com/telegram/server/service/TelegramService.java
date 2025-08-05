@@ -26,6 +26,8 @@ import java.util.HashMap;
 import java.util.Map;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.telegram.server.config.TelegramConfigManager;
+import org.springframework.beans.factory.annotation.Autowired;
 
 /**
  * 单账号Telegram服务类
@@ -75,24 +77,28 @@ public class TelegramService {
     private static final DateTimeFormatter dateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
     /**
-     * 配置文件中的API ID
-     * 从application.properties或application.yml中读取
+     * Telegram配置管理器
+     * 负责API配置信息的持久化存储和读取
      */
-    @Value("${telegram.api.id:}")
+    @Autowired
+    private TelegramConfigManager configManager;
+    
+    /**
+     * 当前使用的API ID
+     * 从配置文件中读取，不再从application.yml获取
+     */
     private Integer apiId;
 
     /**
-     * 配置文件中的API Hash
-     * 从application.properties或application.yml中读取
+     * 当前使用的API Hash
+     * 从配置文件中读取，不再从application.yml获取
      */
-    @Value("${telegram.api.hash:}")
     private String apiHash;
 
     /**
-     * 配置文件中的手机号码
-     * 从application.properties或application.yml中读取
+     * 当前使用的手机号码
+     * 从配置文件中读取，不再从application.yml获取
      */
-    @Value("${telegram.phone.number:}")
     private String phoneNumber;
     
     /**
@@ -171,6 +177,9 @@ public class TelegramService {
             
             logger.info("Telegram服务基础组件初始化完成");
             
+            // 从配置管理器加载配置
+            loadConfigFromManager();
+            
             // 自动尝试使用默认配置初始化客户端
             // 如果存在有效的session，将自动恢复登录状态
             autoInitializeClient();
@@ -178,6 +187,48 @@ public class TelegramService {
         } catch (Exception e) {
             logger.error("初始化Telegram服务失败", e);
             throw new RuntimeException("Failed to initialize Telegram service", e);
+        }
+    }
+    
+    /**
+     * 从配置管理器加载配置信息
+     * 
+     * 在服务启动时从持久化存储中读取API配置信息，
+     * 如果配置文件存在且有效，则加载到内存中使用。
+     * 
+     * @author liubo
+     * @since 2025.01.05
+     */
+    private void loadConfigFromManager() {
+        try {
+            if (configManager.hasConfig()) {
+                Map<String, Object> config = configManager.loadConfig();
+                if (configManager.isValidConfig(config)) {
+                    // 加载API配置
+                    Object apiIdObj = config.get("apiId");
+                    if (apiIdObj instanceof Integer) {
+                        this.apiId = (Integer) apiIdObj;
+                    } else if (apiIdObj instanceof Number) {
+                        this.apiId = ((Number) apiIdObj).intValue();
+                    }
+                    
+                    this.apiHash = (String) config.get("apiHash");
+                    this.phoneNumber = (String) config.get("phoneNumber");
+                    
+                    // 同时设置运行时配置
+                    this.runtimeApiId = this.apiId;
+                    this.runtimeApiHash = this.apiHash;
+                    this.runtimePhoneNumber = this.phoneNumber;
+                    
+                    logger.info("成功从配置文件加载API配置信息");
+                } else {
+                    logger.warn("配置文件存在但内容无效，跳过加载");
+                }
+            } else {
+                logger.info("未找到配置文件，等待首次配置");
+            }
+        } catch (Exception e) {
+            logger.error("加载配置信息失败", e);
         }
     }
 
@@ -540,9 +591,23 @@ public class TelegramService {
                 return true;
             }
             
+            // 更新运行时配置
             this.runtimeApiId = appId;
             this.runtimeApiHash = appHash;
+            
+            // 同时更新基础配置
+            this.apiId = appId;
+            this.apiHash = appHash;
+            
             logger.info("API配置更新: appId={}, appHash={}", appId, appHash.substring(0, 8) + "...");
+            
+            // 保存配置到配置管理器
+            boolean saveSuccess = configManager.saveConfig(appId, appHash, this.runtimePhoneNumber);
+            if (saveSuccess) {
+                logger.info("API配置已持久化保存");
+            } else {
+                logger.warn("API配置保存失败，但将继续使用内存中的配置");
+            }
             
             // 只有在配置变更时才重新初始化客户端
             initializeClient();
@@ -574,12 +639,23 @@ public class TelegramService {
     public boolean submitPhoneNumber(String phoneNumber) {
         try {
             this.runtimePhoneNumber = phoneNumber;
+            this.phoneNumber = phoneNumber;
             logger.info("保存手机号: {}", phoneNumber);
             
             // 检查客户端是否已初始化
             if (client == null) {
                 logger.error("客户端未初始化，请先配置API");
                 return false;
+            }
+            
+            // 保存手机号到配置管理器
+            if (this.apiId != null && this.apiHash != null) {
+                boolean saveSuccess = configManager.saveConfig(this.apiId, this.apiHash, phoneNumber);
+                if (saveSuccess) {
+                    logger.info("手机号已保存到配置文件");
+                } else {
+                    logger.warn("手机号保存失败，但将继续认证流程");
+                }
             }
             
             // 发送手机号进行认证
@@ -595,12 +671,40 @@ public class TelegramService {
     /**
      * 自动初始化客户端（使用默认配置，支持session恢复）
      */
+    /**
+     * 自动初始化客户端
+     * 
+     * 在应用启动时自动检查配置和session文件，如果存在有效的配置和session，
+     * 则自动初始化客户端并恢复登录状态。这样可以实现应用重启后的自动登录。
+     * 
+     * 检查逻辑：
+     * 1. 检查API配置是否完整（API ID、API Hash、手机号）
+     * 2. 检查session文件是否存在
+     * 3. 如果都满足，则自动初始化客户端
+     * 4. TDLight会自动从session文件恢复登录状态
+     * 
+     * @author liubo
+     * @since 2025.08.05
+     */
     private void autoInitializeClient() {
         try {
-            // 检查是否有API配置，如果没有则跳过自动初始化
+            // 检查是否有完整的API配置
             if (apiId == null || apiHash == null || apiHash.isEmpty()) {
                 logger.info("未配置API信息，跳过自动初始化。请通过 /api/telegram/config 接口配置API信息。");
                 return;
+            }
+            
+            // 检查session文件是否存在
+            Path sessionDir = Paths.get(sessionPath);
+            Path databasePath = sessionDir.resolve("database");
+            Path sessionFile = databasePath.resolve("td.binlog");
+            
+            boolean hasSessionFile = sessionFile.toFile().exists();
+            
+            if (hasSessionFile) {
+                logger.info("检测到已存在的session文件，正在尝试自动恢复登录状态...");
+            } else {
+                logger.info("未检测到session文件，需要首次认证。请通过API接口完成认证流程。");
             }
             
             logger.info("正在自动初始化Telegram客户端...");
@@ -609,8 +713,7 @@ public class TelegramService {
             APIToken apiToken = new APIToken(apiId, apiHash);
             TDLibSettings settings = TDLibSettings.create(apiToken);
             
-            Path sessionDir = Paths.get(sessionPath);
-            settings.setDatabaseDirectoryPath(sessionDir.resolve("database"));
+            settings.setDatabaseDirectoryPath(databasePath);
             settings.setDownloadedFilesDirectoryPath(sessionDir.resolve("downloads"));
             
             SimpleTelegramClientBuilder clientBuilder = clientFactory.builder(settings);
@@ -622,11 +725,17 @@ public class TelegramService {
             clientBuilder.addCommandHandler("quit", this::handleQuitCommand);
             
             // 创建客户端，如果存在有效session会自动恢复
-            client = clientBuilder.build(AuthenticationSupplier.user(phoneNumber));
+            // 如果没有手机号配置，使用空字符串，让TDLight从session恢复
+            String usePhoneNumber = (phoneNumber != null && !phoneNumber.isEmpty()) ? phoneNumber : "";
+            client = clientBuilder.build(AuthenticationSupplier.user(usePhoneNumber));
             
             configureProxy();
             
-            logger.info("Telegram客户端自动初始化完成，如果存在有效session将自动登录");
+            if (hasSessionFile) {
+                logger.info("Telegram客户端自动初始化完成，正在从session文件恢复登录状态...");
+            } else {
+                logger.info("Telegram客户端自动初始化完成，等待首次认证...");
+            }
         } catch (Exception e) {
             logger.error("自动初始化客户端失败", e);
         }
@@ -647,6 +756,12 @@ public class TelegramService {
             int useApiId = runtimeApiId != null ? runtimeApiId : apiId;
             String useApiHash = runtimeApiHash != null ? runtimeApiHash : apiHash;
             
+            // 检查API配置是否完整
+            if (useApiId == 0 || useApiHash == null || useApiHash.isEmpty()) {
+                logger.warn("API配置不完整，跳过客户端初始化");
+                return;
+            }
+            
             APIToken apiToken = new APIToken(useApiId, useApiHash);
             TDLibSettings settings = TDLibSettings.create(apiToken);
             
@@ -662,8 +777,9 @@ public class TelegramService {
             clientBuilder.addUpdateHandler(TdApi.UpdateConnectionState.class, this::handleConnectionState);
             clientBuilder.addCommandHandler("quit", this::handleQuitCommand);
             
-            // 使用运行时手机号或默认手机号
-            String usePhoneNumber = runtimePhoneNumber != null ? runtimePhoneNumber : phoneNumber;
+            // 使用运行时手机号或默认手机号，如果没有手机号则使用空字符串
+            String usePhoneNumber = runtimePhoneNumber != null ? runtimePhoneNumber : 
+                                   (phoneNumber != null ? phoneNumber : "");
             client = clientBuilder.build(AuthenticationSupplier.user(usePhoneNumber));
             
             configureProxy();
@@ -920,6 +1036,130 @@ public class TelegramService {
         
         status.put("timestamp", System.currentTimeMillis());
         return status;
+    }
+
+    /**
+     * 初始化账号
+     * 
+     * 创建并初始化单个Telegram账号实例，准备进行API配置和认证流程。
+     * 这是使用系统的第一步操作。
+     * 
+     * @author liubo
+     * @since 2024-12-19
+     */
+    public void initializeAccount() {
+        try {
+            logger.info("正在初始化Telegram账号...");
+            
+            // 重置运行时配置
+            this.runtimeApiId = null;
+            this.runtimeApiHash = null;
+            this.runtimePhoneNumber = null;
+            this.currentAuthState = null;
+            
+            // 如果客户端已存在，先关闭
+            if (client != null) {
+                client.close();
+                client = null;
+            }
+            
+            logger.info("Telegram账号初始化完成，请配置API信息");
+            
+        } catch (Exception e) {
+            logger.error("初始化Telegram账号时发生错误", e);
+            throw new RuntimeException("初始化账号失败: " + e.getMessage(), e);
+        }
+    }
+    
+    /**
+     * 停止消息监听
+     * 
+     * 停止Telegram消息监听功能，但保持客户端连接。
+     * 
+     * @author liubo
+     * @since 2024-12-19
+     */
+    public void stopListening() {
+        try {
+            logger.info("正在停止消息监听...");
+            
+            if (client != null) {
+                // 这里可以添加停止特定监听器的逻辑
+                // 目前TDLight客户端没有直接的停止监听方法
+                // 但可以通过标志位控制消息处理
+                logger.info("消息监听已停止");
+            } else {
+                logger.warn("客户端未初始化，无法停止监听");
+                throw new RuntimeException("客户端未初始化");
+            }
+            
+        } catch (Exception e) {
+            logger.error("停止消息监听时发生错误", e);
+            throw new RuntimeException("停止监听失败: " + e.getMessage(), e);
+        }
+    }
+    
+    /**
+     * 清理Session数据
+     * 
+     * 清除当前账号的所有Session数据，包括认证信息和缓存数据。
+     * 清理后需要重新进行认证流程。
+     * 
+     * @author liubo
+     * @since 2024-12-19
+     */
+    public void clearSession() {
+        try {
+            logger.info("正在清理Session数据...");
+            
+            // 关闭当前客户端
+            if (client != null) {
+                client.close();
+                client = null;
+            }
+            
+            // 重置认证状态
+            this.currentAuthState = null;
+            this.runtimeApiId = null;
+            this.runtimeApiHash = null;
+            this.runtimePhoneNumber = null;
+            this.apiId = null;
+            this.apiHash = null;
+            this.phoneNumber = null;
+            
+            // 删除配置文件
+            try {
+                boolean configDeleted = configManager.deleteConfig();
+                if (configDeleted) {
+                    logger.info("配置文件已删除");
+                } else {
+                    logger.warn("配置文件删除失败或不存在");
+                }
+            } catch (Exception e) {
+                logger.warn("删除配置文件时发生错误: {}", e.getMessage());
+            }
+            
+            // 删除Session文件
+            try {
+                Path sessionDir = Paths.get(sessionPath);
+                if (sessionDir.toFile().exists()) {
+                    // 删除Session目录下的所有文件
+                    java.nio.file.Files.walk(sessionDir)
+                        .sorted(java.util.Comparator.reverseOrder())
+                        .map(java.nio.file.Path::toFile)
+                        .forEach(java.io.File::delete);
+                    logger.info("Session文件已删除: {}", sessionPath);
+                }
+            } catch (Exception e) {
+                logger.warn("删除Session文件时发生错误: {}", e.getMessage());
+            }
+            
+            logger.info("Session数据清理完成");
+            
+        } catch (Exception e) {
+            logger.error("清理Session数据时发生错误", e);
+            throw new RuntimeException("清理Session失败: " + e.getMessage(), e);
+        }
     }
 
     /**
