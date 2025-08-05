@@ -219,6 +219,14 @@ curl -X POST http://localhost:8080/telegram/listening/start
 curl http://localhost:8080/telegram/auth/status
 ```
 
+## TODO 列表
+
+以下是项目的后续开发计划：
+
+- [ ] **多账户管理** - 支持同时管理多个Telegram账户，实现账户间的独立认证和消息监听
+- [ ] **多数据源存储** - 集成多种数据存储方案（MySQL、MongoDB、Redis等），支持消息持久化和历史查询
+- [ ] **实时消息分类** - 基于机器学习算法实现消息智能分类，支持自定义分类规则和标签管理
+
 ## 作者
 
 - **作者**: liubo
