@@ -220,6 +220,7 @@
                 <div class="help-text">从 https://my.telegram.org 获取</div>
             </div>
             <button class="btn" onclick="submitApiConfig()">下一步</button>
+            <button class="btn btn-secondary" onclick="resetSession()">重置Session</button>
         </div>
         
         <!-- 步骤2: 手机号 -->
@@ -364,6 +365,15 @@
             }
             
             try {
+                // 先清理现有session以避免文件锁定冲突
+                showMessage('正在清理现有session...', 'info');
+                await fetch('/api/telegram/session/clear', {
+                    method: 'DELETE'
+                });
+                
+                // 等待一秒确保清理完成
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                
                 const response = await fetch('/api/telegram/config', {
                     method: 'POST',
                     headers: {
@@ -378,6 +388,28 @@
                     nextStep();
                 } else {
                     showMessage(result.message || 'API配置失败', 'error');
+                }
+            } catch (error) {
+                showMessage('网络错误: ' + error.message, 'error');
+            }
+        }
+        
+        async function resetSession() {
+            try {
+                showMessage('正在重置Session...', 'info');
+                const response = await fetch('/api/telegram/session/clear', {
+                    method: 'DELETE'
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    showMessage('Session重置成功！', 'success');
+                    // 重置到第一步
+                    currentStep = 1;
+                    updateStepIndicator();
+                } else {
+                    showMessage(result.message || 'Session重置失败', 'error');
                 }
             } catch (error) {
                 showMessage('网络错误: ' + error.message, 'error');

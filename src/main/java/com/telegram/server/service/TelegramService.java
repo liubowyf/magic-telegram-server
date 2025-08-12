@@ -27,7 +27,15 @@ import java.util.Map;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.telegram.server.config.TelegramConfigManager;
+import com.telegram.server.entity.TelegramSession;
 import org.springframework.beans.factory.annotation.Autowired;
+import java.io.File;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.util.Base64;
+import java.util.concurrent.CompletableFuture;
+import java.util.Optional;
+import java.util.List;
 
 /**
  * 单账号Telegram服务类
@@ -82,6 +90,13 @@ public class TelegramService {
      */
     @Autowired
     private TelegramConfigManager configManager;
+    
+    /**
+     * Telegram Session管理服务
+     * 负责MongoDB中session数据的管理
+     */
+    @Autowired
+    private TelegramSessionService sessionService;
     
     /**
      * 当前使用的API ID
@@ -177,8 +192,11 @@ public class TelegramService {
             
             logger.info("Telegram服务基础组件初始化完成");
             
-            // 从配置管理器加载配置
-            loadConfigFromManager();
+            // 初始化Session管理服务
+            sessionService.init();
+            
+            // 从MongoDB加载配置（优先）或从配置管理器加载配置
+            loadConfigFromMongoDB();
             
             // 自动尝试使用默认配置初始化客户端
             // 如果存在有效的session，将自动恢复登录状态
@@ -191,7 +209,59 @@ public class TelegramService {
     }
     
     /**
-     * 从配置管理器加载配置信息
+     * 从MongoDB加载配置信息
+     * 
+     * 优先从MongoDB中查找可用的session配置，如果没有找到则回退到配置文件。
+     * 支持集群环境下的配置共享和负载均衡。
+     * 
+     * @author liubo
+     * @since 2025.08.11
+     */
+    private void loadConfigFromMongoDB() {
+        try {
+            // 首先尝试从MongoDB获取可用的session
+            List<TelegramSession> availableSessions = sessionService.getAvailableSessions();
+            
+            if (!availableSessions.isEmpty()) {
+                // 选择第一个可用的session
+                TelegramSession session = availableSessions.get(0);
+                
+                this.apiId = session.getApiId();
+                this.apiHash = session.getApiHash();
+                this.phoneNumber = session.getPhoneNumber();
+                
+                // 同时设置运行时配置
+                this.runtimeApiId = this.apiId;
+                this.runtimeApiHash = this.apiHash;
+                this.runtimePhoneNumber = this.phoneNumber;
+                
+                // 激活此session
+                sessionService.activateSession(this.phoneNumber);
+                
+                // 从MongoDB恢复session文件到本地
+                sessionService.restoreSessionFiles(this.phoneNumber, sessionPath);
+                
+                logger.info("成功从MongoDB加载session配置: {}", this.phoneNumber);
+                return;
+            }
+            
+            // 如果MongoDB中没有可用session，回退到配置文件
+            logger.info("MongoDB中没有可用session，尝试从配置文件加载");
+            loadConfigFromManager();
+            
+            // 如果从配置文件加载成功，则迁移到MongoDB
+            if (this.apiId != null && this.apiHash != null && this.phoneNumber != null) {
+                migrateConfigToMongoDB();
+            }
+            
+        } catch (Exception e) {
+            logger.error("从MongoDB加载配置失败，回退到配置文件", e);
+            loadConfigFromManager();
+        }
+    }
+    
+    /**
+     * 从配置管理器加载配置信息（回退方法）
      * 
      * 在服务启动时从持久化存储中读取API配置信息，
      * 如果配置文件存在且有效，则加载到内存中使用。
@@ -199,36 +269,87 @@ public class TelegramService {
      * @author liubo
      * @since 2025.01.05
      */
+    /**
+     * 从配置管理器加载配置信息（已废弃）
+     * 
+     * 此方法已废弃，所有配置现在都从MongoDB加载。
+     * 保留此方法仅为兼容性考虑。
+     */
+    @Deprecated
     private void loadConfigFromManager() {
+        logger.debug("loadConfigFromManager方法已废弃，所有配置现在都从MongoDB加载");
+        // 不再从本地文件加载配置，所有配置都从MongoDB获取
+    }
+    
+    /**
+     * 将配置迁移到MongoDB
+     * 
+     * 将从配置文件加载的配置信息迁移到MongoDB中，
+     * 同时保存本地session文件数据。
+     * 
+     * @author liubo
+     * @since 2025.08.11
+     */
+    private void migrateConfigToMongoDB() {
         try {
-            if (configManager.hasConfig()) {
-                Map<String, Object> config = configManager.loadConfig();
-                if (configManager.isValidConfig(config)) {
-                    // 加载API配置
-                    Object apiIdObj = config.get("apiId");
-                    if (apiIdObj instanceof Integer) {
-                        this.apiId = (Integer) apiIdObj;
-                    } else if (apiIdObj instanceof Number) {
-                        this.apiId = ((Number) apiIdObj).intValue();
-                    }
-                    
-                    this.apiHash = (String) config.get("apiHash");
-                    this.phoneNumber = (String) config.get("phoneNumber");
-                    
-                    // 同时设置运行时配置
-                    this.runtimeApiId = this.apiId;
-                    this.runtimeApiHash = this.apiHash;
-                    this.runtimePhoneNumber = this.phoneNumber;
-                    
-                    logger.info("成功从配置文件加载API配置信息");
-                } else {
-                    logger.warn("配置文件存在但内容无效，跳过加载");
-                }
-            } else {
-                logger.info("未找到配置文件，等待首次配置");
+            if (this.apiId != null && this.apiHash != null && this.phoneNumber != null) {
+                // 创建或更新MongoDB中的session
+                TelegramSession session = sessionService.createOrUpdateSession(
+                    this.phoneNumber, this.apiId, this.apiHash);
+                
+                // 保存本地session文件到MongoDB
+                sessionService.saveSessionFiles(this.phoneNumber, sessionPath);
+                
+                // 激活session
+                sessionService.activateSession(this.phoneNumber);
+                
+                logger.info("成功将配置迁移到MongoDB: {}", this.phoneNumber);
             }
         } catch (Exception e) {
-            logger.error("加载配置信息失败", e);
+            logger.error("迁移配置到MongoDB失败", e);
+        }
+    }
+    
+    /**
+     * 保存session到MongoDB
+     * 
+     * 在认证成功后将当前session数据保存到MongoDB中，
+     * 确保集群环境下的session数据同步。
+     * 
+     * @author liubo
+     * @since 2025.08.11
+     */
+    private void saveSessionToMongoDB() {
+        try {
+            String currentPhoneNumber = runtimePhoneNumber != null ? runtimePhoneNumber : phoneNumber;
+            Integer currentApiId = runtimeApiId != null ? runtimeApiId : apiId;
+            String currentApiHash = runtimeApiHash != null ? runtimeApiHash : apiHash;
+            
+            if (currentPhoneNumber != null && currentApiId != null && currentApiHash != null) {
+                // 创建或更新MongoDB中的session
+                sessionService.createOrUpdateSession(currentPhoneNumber, currentApiId, currentApiHash);
+                
+                // 保存临时session文件到MongoDB
+                sessionService.saveSessionFiles(currentPhoneNumber, sessionPath);
+                
+                // 更新session状态为已认证
+                sessionService.updateAuthenticationStatus(currentPhoneNumber, true);
+                sessionService.updateAuthState(currentPhoneNumber, "READY");
+                
+                logger.info("成功保存session到MongoDB: {}", currentPhoneNumber);
+                
+                // 异步清理临时文件（延迟执行，确保TDLight完成所有操作）
+                CompletableFuture.runAsync(() -> {
+                    try {
+                        Thread.sleep(5000); // 等待5秒确保所有操作完成
+                        cleanupTempSessionFiles();
+                    } catch (Exception e) {
+                        logger.warn("清理临时session文件时发生错误: {}", e.getMessage());
+                    }
+                });
+            }
+        } catch (Exception e) {
+            logger.error("保存session到MongoDB失败", e);
         }
     }
 
@@ -342,12 +463,14 @@ public class TelegramService {
                         // 消息内容信息
                         messageJson.put("消息内容", String.format("【%s】", messageText));
                         
-                        // 消息类型
+                        // 消息类型和特殊处理
                         String contentType = "【未知类型】";
                         if (message.content instanceof TdApi.MessageText) {
                             contentType = "【文本消息】";
                         } else if (message.content instanceof TdApi.MessagePhoto) {
                             contentType = "【图片消息】";
+                            // 处理图片消息的详细信息
+                            handlePhotoMessage(messageJson, (TdApi.MessagePhoto) message.content);
                         } else if (message.content instanceof TdApi.MessageVideo) {
                             contentType = "【视频消息】";
                         } else if (message.content instanceof TdApi.MessageAudio) {
@@ -469,6 +592,9 @@ public class TelegramService {
             logger.info("✅ Telegram授权成功，session已恢复，开始监听消息");
             // 授权成功后立即获取聊天列表以启用实时消息接收
             initializeMessageReceiving();
+            
+            // 保存session到MongoDB
+            saveSessionToMongoDB();
         } else if (authState instanceof TdApi.AuthorizationStateWaitPhoneNumber) {
             logger.info("⏳ 等待输入手机号码 - 请调用 /api/telegram/phone 接口提交手机号");
         } else if (authState instanceof TdApi.AuthorizationStateWaitCode) {
@@ -601,12 +727,17 @@ public class TelegramService {
             
             logger.info("API配置更新: appId={}, appHash={}", appId, appHash.substring(0, 8) + "...");
             
-            // 保存配置到配置管理器
-            boolean saveSuccess = configManager.saveConfig(appId, appHash, this.runtimePhoneNumber);
-            if (saveSuccess) {
-                logger.info("API配置已持久化保存");
+            // 保存配置到MongoDB（如果有手机号）
+            if (this.runtimePhoneNumber != null && !this.runtimePhoneNumber.isEmpty()) {
+                try {
+                    // 创建或更新MongoDB中的session配置
+                    sessionService.createOrUpdateSession(this.runtimePhoneNumber, appId, appHash);
+                    logger.info("API配置已保存到MongoDB: {}", this.runtimePhoneNumber);
+                } catch (Exception e) {
+                    logger.warn("保存API配置到MongoDB失败: {}", e.getMessage());
+                }
             } else {
-                logger.warn("API配置保存失败，但将继续使用内存中的配置");
+                logger.info("暂无手机号，API配置将在认证时保存到MongoDB");
             }
             
             // 只有在配置变更时才重新初始化客户端
@@ -648,13 +779,14 @@ public class TelegramService {
                 return false;
             }
             
-            // 保存手机号到配置管理器
+            // 保存配置到MongoDB
             if (this.apiId != null && this.apiHash != null) {
-                boolean saveSuccess = configManager.saveConfig(this.apiId, this.apiHash, phoneNumber);
-                if (saveSuccess) {
-                    logger.info("手机号已保存到配置文件");
-                } else {
-                    logger.warn("手机号保存失败，但将继续认证流程");
+                try {
+                    // 创建或更新MongoDB中的session配置
+                    sessionService.createOrUpdateSession(phoneNumber, this.apiId, this.apiHash);
+                    logger.info("配置已保存到MongoDB: {}", phoneNumber);
+                } catch (Exception e) {
+                    logger.warn("保存配置到MongoDB失败: {}", e.getMessage());
                 }
             }
             
@@ -674,14 +806,14 @@ public class TelegramService {
     /**
      * 自动初始化客户端
      * 
-     * 在应用启动时自动检查配置和session文件，如果存在有效的配置和session，
+     * 在应用启动时自动检查MongoDB中的配置和session数据，如果存在有效的配置和session，
      * 则自动初始化客户端并恢复登录状态。这样可以实现应用重启后的自动登录。
      * 
      * 检查逻辑：
      * 1. 检查API配置是否完整（API ID、API Hash、手机号）
-     * 2. 检查session文件是否存在
+     * 2. 检查MongoDB中是否存在session数据
      * 3. 如果都满足，则自动初始化客户端
-     * 4. TDLight会自动从session文件恢复登录状态
+     * 4. TDLight会自动从临时恢复的session文件恢复登录状态
      * 
      * @author liubo
      * @since 2025.08.05
@@ -694,17 +826,92 @@ public class TelegramService {
                 return;
             }
             
-            // 检查session文件是否存在
-            Path sessionDir = Paths.get(sessionPath);
-            Path databasePath = sessionDir.resolve("database");
-            Path sessionFile = databasePath.resolve("td.binlog");
+            // 检查MongoDB中是否存在session数据
+            boolean hasMongoSession = false;
+            String sessionPhoneNumber = null;
+            TelegramSession activeSession = null;
             
-            boolean hasSessionFile = sessionFile.toFile().exists();
-            
-            if (hasSessionFile) {
-                logger.info("检测到已存在的session文件，正在尝试自动恢复登录状态...");
+            if (phoneNumber != null && !phoneNumber.isEmpty()) {
+                Optional<TelegramSession> sessionOpt = sessionService.getSessionByPhoneNumber(phoneNumber);
+                if (sessionOpt.isPresent()) {
+                    TelegramSession session = sessionOpt.get();
+                    if ("READY".equals(session.getAuthState())) {
+                        hasMongoSession = true;
+                        sessionPhoneNumber = phoneNumber;
+                        activeSession = session;
+                        int dbFileCount = (session.getDatabaseFiles() != null) ? session.getDatabaseFiles().size() : 0;
+                        logger.info("检测到MongoDB中存在已认证的session数据: {}, 数据库文件数量: {}", phoneNumber, dbFileCount);
+                    } else {
+                        logger.info("MongoDB中找到手机号 {} 的session数据，但状态为: {}", phoneNumber, session.getAuthState());
+                    }
+                } else {
+                    logger.info("MongoDB中未找到手机号 {} 的session数据", phoneNumber);
+                }
             } else {
-                logger.info("未检测到session文件，需要首次认证。请通过API接口完成认证流程。");
+                // 如果没有配置手机号，尝试查找可用的已认证session
+                List<TelegramSession> availableSessions = sessionService.getAvailableSessions();
+                for (TelegramSession session : availableSessions) {
+                    if ("READY".equals(session.getAuthState())) {
+                        hasMongoSession = true;
+                        sessionPhoneNumber = session.getPhoneNumber();
+                        phoneNumber = sessionPhoneNumber; // 更新当前手机号
+                        activeSession = session;
+                        int dbFileCount = (session.getDatabaseFiles() != null) ? session.getDatabaseFiles().size() : 0;
+                        logger.info("检测到MongoDB中存在已认证的可用session数据: {}, 数据库文件数量: {}", sessionPhoneNumber, dbFileCount);
+                        break;
+                    }
+                }
+                if (!hasMongoSession) {
+                    logger.info("MongoDB中未找到任何已认证的可用session数据");
+                }
+            }
+            
+            // 创建临时session目录（使用系统临时目录）
+            Path tempSessionDir = Files.createTempDirectory("telegram-session-");
+            sessionPath = tempSessionDir.toString();
+            logger.info("创建临时session目录: {}", sessionPath);
+            
+            // 如果MongoDB中有session数据，恢复到临时目录
+            if (hasMongoSession && sessionPhoneNumber != null && activeSession != null) {
+                logger.info("正在从MongoDB恢复session数据到临时目录: {}", sessionPath);
+                try {
+                    boolean restored = sessionService.restoreSessionFiles(sessionPhoneNumber, sessionPath);
+                    if (restored) {
+                        logger.info("成功从MongoDB恢复session数据");
+                        // 检查恢复后的文件
+                        File sessionDirFile = new File(sessionPath);
+                        if (sessionDirFile.exists() && sessionDirFile.isDirectory()) {
+                            File[] files = sessionDirFile.listFiles();
+                            if (files != null) {
+                                logger.info("恢复后的session目录包含 {} 个文件", files.length);
+                                for (File file : files) {
+                                    logger.info("恢复的文件: {} (大小: {} bytes)", file.getName(), file.length());
+                                }
+                            } else {
+                                logger.warn("session目录为空");
+                            }
+                        } else {
+                            logger.warn("session目录不存在或不是目录: {}", sessionPath);
+                        }
+                        
+                        // 更新运行时配置
+                        runtimeApiId = activeSession.getApiId();
+                        runtimeApiHash = activeSession.getApiHash();
+                        runtimePhoneNumber = activeSession.getPhoneNumber();
+                    } else {
+                        logger.warn("从MongoDB恢复session数据失败，将进行首次认证");
+                        hasMongoSession = false;
+                    }
+                } catch (Exception e) {
+                    logger.error("从MongoDB恢复session数据时发生错误: {}", e.getMessage(), e);
+                    hasMongoSession = false;
+                }
+            }
+            
+            if (hasMongoSession) {
+                logger.info("检测到已存在的session数据，正在尝试自动恢复登录状态...");
+            } else {
+                logger.info("未检测到已认证的session数据，需要首次认证。请通过API接口完成认证流程。");
             }
             
             logger.info("正在自动初始化Telegram客户端...");
@@ -713,7 +920,8 @@ public class TelegramService {
             APIToken apiToken = new APIToken(apiId, apiHash);
             TDLibSettings settings = TDLibSettings.create(apiToken);
             
-            settings.setDatabaseDirectoryPath(databasePath);
+            Path sessionDir = Paths.get(sessionPath);
+            settings.setDatabaseDirectoryPath(sessionDir.resolve("database"));
             settings.setDownloadedFilesDirectoryPath(sessionDir.resolve("downloads"));
             
             SimpleTelegramClientBuilder clientBuilder = clientFactory.builder(settings);
@@ -725,14 +933,21 @@ public class TelegramService {
             clientBuilder.addCommandHandler("quit", this::handleQuitCommand);
             
             // 创建客户端，如果存在有效session会自动恢复
-            // 如果没有手机号配置，使用空字符串，让TDLight从session恢复
-            String usePhoneNumber = (phoneNumber != null && !phoneNumber.isEmpty()) ? phoneNumber : "";
-            client = clientBuilder.build(AuthenticationSupplier.user(usePhoneNumber));
+            if (hasMongoSession && sessionPhoneNumber != null && !sessionPhoneNumber.isEmpty()) {
+                // 对于已认证的session，使用consoleLogin让TDLib自动从session文件恢复
+                logger.info("检测到已认证session，使用consoleLogin从session文件恢复登录状态");
+                client = clientBuilder.build(AuthenticationSupplier.consoleLogin());
+            } else {
+                // 对于新认证，使用user认证供应商
+                String usePhoneNumber = (sessionPhoneNumber != null && !sessionPhoneNumber.isEmpty()) ? sessionPhoneNumber : "";
+                logger.info("使用用户认证供应商进行首次认证");
+                client = clientBuilder.build(AuthenticationSupplier.user(usePhoneNumber));
+            }
             
             configureProxy();
             
-            if (hasSessionFile) {
-                logger.info("Telegram客户端自动初始化完成，正在从session文件恢复登录状态...");
+            if (hasMongoSession) {
+                logger.info("Telegram客户端自动初始化完成，正在从MongoDB session数据恢复登录状态...");
             } else {
                 logger.info("Telegram客户端自动初始化完成，等待首次认证...");
             }
@@ -762,6 +977,27 @@ public class TelegramService {
                 return;
             }
             
+            // 确定要使用的手机号
+            String usePhoneNumber = runtimePhoneNumber != null ? runtimePhoneNumber : 
+                                   (phoneNumber != null ? phoneNumber : "");
+            
+            // 如果有手机号，尝试从MongoDB恢复session数据
+            if (usePhoneNumber != null && !usePhoneNumber.isEmpty()) {
+                Optional<TelegramSession> sessionOpt = sessionService.getSessionByPhoneNumber(usePhoneNumber);
+                if (sessionOpt.isPresent()) {
+                    TelegramSession session = sessionOpt.get();
+                    if (session.getDatabaseFiles() != null && !session.getDatabaseFiles().isEmpty()) {
+                        logger.info("正在从MongoDB恢复session数据: {}", usePhoneNumber);
+                        boolean restored = sessionService.restoreSessionFiles(usePhoneNumber, sessionPath);
+                        if (restored) {
+                            logger.info("成功从MongoDB恢复session数据");
+                        } else {
+                            logger.warn("从MongoDB恢复session数据失败");
+                        }
+                    }
+                }
+            }
+            
             APIToken apiToken = new APIToken(useApiId, useApiHash);
             TDLibSettings settings = TDLibSettings.create(apiToken);
             
@@ -777,9 +1013,6 @@ public class TelegramService {
             clientBuilder.addUpdateHandler(TdApi.UpdateConnectionState.class, this::handleConnectionState);
             clientBuilder.addCommandHandler("quit", this::handleQuitCommand);
             
-            // 使用运行时手机号或默认手机号，如果没有手机号则使用空字符串
-            String usePhoneNumber = runtimePhoneNumber != null ? runtimePhoneNumber : 
-                                   (phoneNumber != null ? phoneNumber : "");
             client = clientBuilder.build(AuthenticationSupplier.user(usePhoneNumber));
             
             configureProxy();
@@ -899,12 +1132,37 @@ public class TelegramService {
      * @param content 消息内容
      * @return 文本内容
      */
+    /**
+     * 获取消息文本内容
+     * 
+     * 根据不同的消息类型提取相应的文本内容，
+     * 对于图片消息会提供详细的描述信息。
+     * 
+     * @param content 消息内容对象
+     * @return 消息的文本描述
+     * @author liubo
+     * @since 2025.01.05
+     */
     private String getMessageText(TdApi.MessageContent content) {
         if (content instanceof TdApi.MessageText) {
             return ((TdApi.MessageText) content).text.text;
         } else if (content instanceof TdApi.MessagePhoto) {
             TdApi.MessagePhoto photo = (TdApi.MessagePhoto) content;
-            return "[图片]" + (photo.caption != null ? photo.caption.text : "");
+            StringBuilder photoInfo = new StringBuilder("[图片消息]");
+            
+            // 添加图片尺寸信息
+            if (photo.photo.sizes.length > 0) {
+                TdApi.PhotoSize largestPhoto = photo.photo.sizes[photo.photo.sizes.length - 1];
+                photoInfo.append(String.format(" 尺寸:%dx%d", largestPhoto.width, largestPhoto.height));
+                photoInfo.append(String.format(" 大小:%d字节", largestPhoto.photo.size));
+            }
+            
+            // 添加图片描述
+            if (photo.caption != null && !photo.caption.text.isEmpty()) {
+                photoInfo.append(" 描述:").append(photo.caption.text);
+            }
+            
+            return photoInfo.toString();
         } else if (content instanceof TdApi.MessageVideo) {
             TdApi.MessageVideo video = (TdApi.MessageVideo) content;
             return "[视频]" + (video.caption != null ? video.caption.text : "");
@@ -918,6 +1176,223 @@ public class TelegramService {
             return "[动图]" + (animation.caption != null ? animation.caption.text : "");
         } else {
             return "[" + content.getClass().getSimpleName() + "]";
+        }
+    }
+
+    /**
+     * 处理图片消息的详细信息
+     * 
+     * 解析图片消息的详细信息，包括图片尺寸、文件大小等，
+     * 并尝试下载图片文件，判断图片是链接地址还是base64格式。
+     * 
+     * @param messageJson 消息JSON对象，用于添加图片相关信息
+     * @param photoMessage 图片消息对象
+     * @author liubo
+     * @since 2025.01.05
+     */
+    private void handlePhotoMessage(ObjectNode messageJson, TdApi.MessagePhoto photoMessage) {
+        try {
+            // 添加图片基本信息
+            if (photoMessage.caption != null && !photoMessage.caption.text.isEmpty()) {
+                messageJson.put("图片描述", String.format("【%s】", photoMessage.caption.text));
+            } else {
+                messageJson.put("图片描述", "【无描述】");
+            }
+            
+            // 获取图片的不同尺寸信息
+            TdApi.PhotoSize[] photoSizes = photoMessage.photo.sizes;
+            messageJson.put("图片尺寸数量", String.format("【%d】", photoSizes.length));
+            
+            // 处理最大尺寸的图片
+            if (photoSizes.length > 0) {
+                TdApi.PhotoSize largestPhoto = photoSizes[photoSizes.length - 1]; // 通常最后一个是最大尺寸
+                
+                messageJson.put("图片宽度", String.format("【%d像素】", largestPhoto.width));
+                messageJson.put("图片高度", String.format("【%d像素】", largestPhoto.height));
+                messageJson.put("图片文件大小", String.format("【%d字节】", largestPhoto.photo.size));
+                messageJson.put("图片文件ID", String.format("【%d】", largestPhoto.photo.id));
+                messageJson.put("图片唯一ID", String.format("【%s】", largestPhoto.photo.remote.uniqueId));
+                
+                // 检查图片是否已下载
+                if (largestPhoto.photo.local.isDownloadingCompleted) {
+                    messageJson.put("图片下载状态", "【已下载】");
+                    messageJson.put("图片本地路径", String.format("【%s】", largestPhoto.photo.local.path));
+                    
+                    // 尝试读取图片文件并判断格式
+                    processDownloadedPhoto(messageJson, largestPhoto.photo.local.path);
+                } else {
+                    messageJson.put("图片下载状态", "【未下载】");
+                    
+                    // 异步下载图片
+                    downloadPhoto(messageJson, largestPhoto.photo);
+                }
+            } else {
+                messageJson.put("图片信息", "【无可用尺寸】");
+            }
+            
+        } catch (Exception e) {
+            logger.error("处理图片消息时发生错误", e);
+            messageJson.put("图片处理错误", String.format("【%s】", e.getMessage()));
+        }
+    }
+    
+    /**
+     * 处理已下载的图片文件
+     * 
+     * 读取本地图片文件，判断是否为base64格式或文件路径，
+     * 并提取图片的基本信息。
+     * 
+     * @param messageJson 消息JSON对象
+     * @param localPath 图片本地路径
+     * @author liubo
+     * @since 2025.01.05
+     */
+    private void processDownloadedPhoto(ObjectNode messageJson, String localPath) {
+        try {
+            File photoFile = new File(localPath);
+            if (photoFile.exists() && photoFile.isFile()) {
+                // 读取文件大小
+                long fileSize = photoFile.length();
+                messageJson.put("图片实际文件大小", String.format("【%d字节】", fileSize));
+                
+                // 判断文件是否为图片格式
+                String fileName = photoFile.getName().toLowerCase();
+                String fileExtension = "";
+                int lastDotIndex = fileName.lastIndexOf('.');
+                if (lastDotIndex > 0) {
+                    fileExtension = fileName.substring(lastDotIndex + 1);
+                }
+                messageJson.put("图片文件扩展名", String.format("【%s】", fileExtension));
+                
+                // 判断是否为常见图片格式
+                boolean isImageFile = fileExtension.matches("jpg|jpeg|png|gif|bmp|webp|tiff|svg");
+                messageJson.put("是否为图片文件", isImageFile ? "【是】" : "【否】");
+                
+                if (isImageFile && fileSize < 1024 * 1024) { // 小于1MB的图片尝试转换为base64
+                    try {
+                        byte[] fileContent = Files.readAllBytes(photoFile.toPath());
+                        String base64Content = Base64.getEncoder().encodeToString(fileContent);
+                        
+                        // 检查是否为有效的base64（简单检查）
+                        boolean isValidBase64 = base64Content.length() % 4 == 0 && base64Content.matches("[A-Za-z0-9+/]*={0,2}");
+                        
+                        if (isValidBase64) {
+                            messageJson.put("图片格式类型", "【Base64编码】");
+                            messageJson.put("Base64长度", String.format("【%d字符】", base64Content.length()));
+                            // 只显示前100个字符的base64内容，避免日志过长
+                            String base64Preview = base64Content.length() > 100 ? 
+                                base64Content.substring(0, 100) + "..." : base64Content;
+                            messageJson.put("Base64预览", String.format("【%s】", base64Preview));
+                        } else {
+                            messageJson.put("图片格式类型", "【文件路径】");
+                        }
+                    } catch (IOException e) {
+                        logger.error("读取图片文件失败: {}", localPath, e);
+                        messageJson.put("图片读取错误", String.format("【%s】", e.getMessage()));
+                    }
+                } else {
+                    messageJson.put("图片格式类型", "【文件路径】");
+                    messageJson.put("图片大小说明", fileSize >= 1024 * 1024 ? "【文件过大，不转换Base64】" : "【非图片文件】");
+                }
+            } else {
+                messageJson.put("图片文件状态", "【文件不存在或不可读】");
+            }
+        } catch (Exception e) {
+            logger.error("处理已下载图片时发生错误", e);
+            messageJson.put("图片处理错误", String.format("【%s】", e.getMessage()));
+        }
+    }
+    
+    /**
+     * 异步下载图片文件
+     * 
+     * 使用TDLib的downloadFile API异步下载图片文件，
+     * 下载完成后更新消息信息。
+     * 
+     * @param messageJson 消息JSON对象
+     * @param photo 图片文件对象
+     * @author liubo
+     * @since 2025.01.05
+     */
+    /**
+     * 下载图片文件
+     * @param messageJson 消息JSON对象
+     * @param photo 图片文件对象
+     * @author liubo
+     * @date 2025-08-11
+     */
+    private void downloadPhoto(ObjectNode messageJson, TdApi.File photo) {
+        try {
+            messageJson.put("图片下载状态", "【开始下载】");
+            
+            // 检查文件是否已经下载完成
+            if (photo.local.isDownloadingCompleted) {
+                logger.info("图片已下载完成，直接处理: {}", photo.local.path);
+                processDownloadedPhoto(messageJson, photo.local.path);
+                return;
+            }
+            
+            // 检查文件是否可以下载
+            if (!photo.local.canBeDownloaded) {
+                logger.warn("图片文件无法下载: 文件ID【{}】", photo.id);
+                messageJson.put("图片下载状态", "【无法下载】");
+                return;
+            }
+            
+            // 创建下载请求
+            TdApi.DownloadFile downloadRequest = new TdApi.DownloadFile(
+                photo.id,     // 文件ID
+                32,           // 优先级（1-32，32为最高优先级）
+                0,            // 起始偏移
+                0,            // 下载大小限制（0表示下载整个文件）
+                true          // 是否同步下载
+            );
+            
+            logger.info("开始下载图片: 文件ID【{}】, 大小【{}】字节", photo.id, photo.size);
+            
+            // 异步下载文件
+            client.send(downloadRequest).whenComplete((downloadedFile, throwable) -> {
+                if (throwable == null) {
+                    if (downloadedFile.local.isDownloadingCompleted) {
+                        logger.info("图片下载完成: {}", downloadedFile.local.path);
+                        
+                        // 创建新的JSON对象来输出下载结果
+                        try {
+                            ObjectNode downloadResultJson = objectMapper.createObjectNode();
+                            downloadResultJson.put("下载完成时间", String.format("【%s】", LocalDateTime.now().format(dateTimeFormatter)));
+                            downloadResultJson.put("图片文件ID", String.format("【%d】", photo.id));
+                            downloadResultJson.put("图片下载路径", String.format("【%s】", downloadedFile.local.path));
+                            downloadResultJson.put("图片文件大小", String.format("【%d字节】", downloadedFile.size));
+                            
+                            // 处理下载完成的图片
+                            processDownloadedPhoto(downloadResultJson, downloadedFile.local.path);
+                            
+                            String downloadResultOutput = objectMapper.writeValueAsString(downloadResultJson);
+                            logger.info("图片下载结果: {}", downloadResultOutput);
+                            System.out.println("📸 图片下载完成: " + downloadResultOutput);
+                            
+                        } catch (Exception jsonException) {
+                            logger.error("生成图片下载结果JSON失败", jsonException);
+                        }
+                    } else {
+                        logger.warn("图片下载未完成: 文件ID【{}】, 下载进度【{}】", photo.id, downloadedFile.local.downloadedSize);
+                        messageJson.put("图片下载状态", String.format("【下载中: %d/%d字节】", downloadedFile.local.downloadedSize, downloadedFile.size));
+                    }
+                } else {
+                    String errorMessage = throwable.getMessage();
+                    if (errorMessage == null || errorMessage.trim().isEmpty()) {
+                        errorMessage = throwable.getClass().getSimpleName();
+                    }
+                    logger.error("图片下载失败: 文件ID【{}】, 错误: {}", photo.id, errorMessage, throwable);
+                    System.out.println(String.format("❌ 图片下载失败: 文件ID【%d】, 错误: %s", photo.id, errorMessage));
+                    messageJson.put("图片下载状态", String.format("【下载失败: %s】", errorMessage));
+                }
+            });
+            
+        } catch (Exception e) {
+            logger.error("启动图片下载时发生错误: 文件ID【{}】", photo.id, e);
+            messageJson.put("图片下载错误", String.format("【%s】", e.getMessage()));
+            System.out.println(String.format("⚠️ 图片下载启动失败: 文件ID【%d】, 错误: %s", photo.id, e.getMessage()));
         }
     }
 
@@ -1112,10 +1587,23 @@ public class TelegramService {
         try {
             logger.info("正在清理Session数据...");
             
+            String currentPhoneNumber = runtimePhoneNumber != null ? runtimePhoneNumber : phoneNumber;
+            
             // 关闭当前客户端
             if (client != null) {
                 client.close();
                 client = null;
+            }
+            
+            // 清理MongoDB中的session数据
+            if (currentPhoneNumber != null) {
+                try {
+                    sessionService.deactivateSession(currentPhoneNumber);
+                    sessionService.deleteSession(currentPhoneNumber);
+                    logger.info("MongoDB中的session数据已清理: {}", currentPhoneNumber);
+                } catch (Exception e) {
+                    logger.warn("清理MongoDB session数据时发生错误: {}", e.getMessage());
+                }
             }
             
             // 重置认证状态
@@ -1127,17 +1615,8 @@ public class TelegramService {
             this.apiHash = null;
             this.phoneNumber = null;
             
-            // 删除配置文件
-            try {
-                boolean configDeleted = configManager.deleteConfig();
-                if (configDeleted) {
-                    logger.info("配置文件已删除");
-                } else {
-                    logger.warn("配置文件删除失败或不存在");
-                }
-            } catch (Exception e) {
-                logger.warn("删除配置文件时发生错误: {}", e.getMessage());
-            }
+            // 注意：不再删除本地配置文件，因为所有配置都存储在MongoDB中
+            logger.debug("跳过删除本地配置文件，所有配置都存储在MongoDB中");
             
             // 删除Session文件
             try {
@@ -1170,6 +1649,12 @@ public class TelegramService {
         try {
             logger.info("正在关闭Telegram服务...");
             
+            // 在关闭前保存session数据到MongoDB
+            if (client != null && currentAuthState instanceof TdApi.AuthorizationStateReady) {
+                logger.info("正在保存session数据到MongoDB...");
+                saveSessionToMongoDB();
+            }
+            
             if (client != null) {
                 client.close();
                 client = null;
@@ -1180,10 +1665,39 @@ public class TelegramService {
                 clientFactory = null;
             }
             
+            // 清理临时session文件
+            cleanupTempSessionFiles();
+            
             logger.info("Telegram服务已关闭");
             
         } catch (Exception e) {
             logger.error("关闭Telegram服务时发生错误", e);
+        }
+    }
+    
+    /**
+     * 清理临时session文件
+     */
+    private void cleanupTempSessionFiles() {
+        try {
+            if (sessionPath != null && sessionPath.contains("telegram-session-")) {
+                Path tempDir = Paths.get(sessionPath);
+                if (Files.exists(tempDir)) {
+                    // 递归删除临时目录及其所有内容
+                    Files.walk(tempDir)
+                        .sorted((a, b) -> b.compareTo(a)) // 先删除文件，再删除目录
+                        .forEach(path -> {
+                            try {
+                                Files.deleteIfExists(path);
+                            } catch (IOException e) {
+                                logger.warn("删除临时文件失败: {}", path, e);
+                            }
+                        });
+                    logger.info("已清理临时session目录: {}", sessionPath);
+                }
+            }
+        } catch (Exception e) {
+            logger.warn("清理临时session文件时发生错误: {}", e.getMessage());
         }
     }
 }

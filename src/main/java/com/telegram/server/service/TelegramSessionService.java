@@ -1,0 +1,518 @@
+package com.telegram.server.service;
+
+import com.telegram.server.entity.TelegramSession;
+import com.telegram.server.repository.TelegramSessionRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.io.File;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.time.LocalDateTime;
+import java.util.*;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
+
+/**
+ * Telegram Session管理服务
+ * 
+ * 负责管理MongoDB中的Telegram session数据，支持集群部署。
+ * 提供session的创建、更新、查询、删除等操作，以及文件数据的序列化和反序列化。
+ * 
+ * 主要功能：
+ * - Session CRUD操作
+ * - 文件数据与MongoDB的转换
+ * - 集群环境下的session分配
+ * - Session生命周期管理
+ * - 数据迁移支持
+ * 
+ * 集群支持：
+ * - 多实例session共享
+ * - 负载均衡分配
+ * - 实例故障恢复
+ * - Session锁定机制
+ * 
+ * @author liubo
+ * @date 2025-08-11
+ */
+@Service
+@Transactional
+public class TelegramSessionService {
+
+    private static final Logger logger = LoggerFactory.getLogger(TelegramSessionService.class);
+
+    @Autowired
+    private TelegramSessionRepository sessionRepository;
+
+    /**
+     * 当前服务实例ID
+     * 用于标识当前服务实例
+     */
+    @Value("${spring.application.name:magic-telegram-server}")
+    private String applicationName;
+
+    /**
+     * 实例ID，结合主机名和启动时间生成唯一标识
+     */
+    private String instanceId;
+
+    /**
+     * Session非活跃超时时间（小时）
+     */
+    @Value("${telegram.session.inactive-timeout:24}")
+    private int inactiveTimeoutHours;
+
+    /**
+     * 初始化服务
+     */
+    public void init() {
+        // 生成唯一的实例ID
+        this.instanceId = generateInstanceId();
+        logger.info("TelegramSessionService初始化完成，实例ID: {}", instanceId);
+        
+        // 清理之前此实例的session状态
+        deactivateInstanceSessions();
+    }
+
+    /**
+     * 生成实例ID
+     * 
+     * @return 实例ID
+     */
+    private String generateInstanceId() {
+        try {
+            String hostname = java.net.InetAddress.getLocalHost().getHostName();
+            long timestamp = System.currentTimeMillis();
+            return String.format("%s-%s-%d", applicationName, hostname, timestamp);
+        } catch (Exception e) {
+            logger.warn("获取主机名失败，使用随机ID", e);
+            return String.format("%s-unknown-%d", applicationName, System.currentTimeMillis());
+        }
+    }
+
+    /**
+     * 停用当前实例的所有session
+     */
+    private void deactivateInstanceSessions() {
+        try {
+            List<TelegramSession> sessions = sessionRepository.findByInstanceIdAndIsActiveTrue(instanceId);
+            for (TelegramSession session : sessions) {
+                session.deactivate();
+                sessionRepository.save(session);
+            }
+            logger.info("已停用实例 {} 的 {} 个session", instanceId, sessions.size());
+        } catch (Exception e) {
+            logger.error("停用实例session失败", e);
+        }
+    }
+
+    /**
+     * 创建或更新session
+     * 
+     * @param phoneNumber 手机号码
+     * @param apiId API ID
+     * @param apiHash API Hash
+     * @return session对象
+     */
+    public TelegramSession createOrUpdateSession(String phoneNumber, Integer apiId, String apiHash) {
+        Optional<TelegramSession> existingSession = sessionRepository.findByPhoneNumber(phoneNumber);
+        
+        TelegramSession session;
+        if (existingSession.isPresent()) {
+            session = existingSession.get();
+            session.setApiId(apiId);
+            session.setApiHash(apiHash);
+            session.setUpdatedTime(LocalDateTime.now());
+            logger.info("更新已存在的session: {}", phoneNumber);
+        } else {
+            session = new TelegramSession(phoneNumber, apiId, apiHash);
+            logger.info("创建新的session: {}", phoneNumber);
+        }
+        
+        return sessionRepository.save(session);
+    }
+
+    /**
+     * 根据手机号获取session
+     * 
+     * @param phoneNumber 手机号码
+     * @return session对象
+     */
+    public Optional<TelegramSession> getSessionByPhoneNumber(String phoneNumber) {
+        return sessionRepository.findByPhoneNumber(phoneNumber);
+    }
+
+    /**
+     * 激活session
+     * 
+     * @param phoneNumber 手机号码
+     * @return 是否成功激活
+     */
+    public boolean activateSession(String phoneNumber) {
+        Optional<TelegramSession> sessionOpt = sessionRepository.findByPhoneNumber(phoneNumber);
+        if (sessionOpt.isPresent()) {
+            TelegramSession session = sessionOpt.get();
+            session.activate(instanceId);
+            sessionRepository.save(session);
+            logger.info("激活session: {} (实例: {})", phoneNumber, instanceId);
+            return true;
+        }
+        logger.warn("未找到要激活的session: {}", phoneNumber);
+        return false;
+    }
+
+    /**
+     * 停用session
+     * 
+     * @param phoneNumber 手机号码
+     * @return 是否成功停用
+     */
+    public boolean deactivateSession(String phoneNumber) {
+        Optional<TelegramSession> sessionOpt = sessionRepository.findByPhoneNumber(phoneNumber);
+        if (sessionOpt.isPresent()) {
+            TelegramSession session = sessionOpt.get();
+            session.deactivate();
+            sessionRepository.save(session);
+            logger.info("停用session: {}", phoneNumber);
+            return true;
+        }
+        logger.warn("未找到要停用的session: {}", phoneNumber);
+        return false;
+    }
+
+    /**
+     * 更新session的认证状态
+     * 
+     * @param phoneNumber 手机号码
+     * @param authState 认证状态
+     */
+    public void updateAuthState(String phoneNumber, String authState) {
+        Optional<TelegramSession> sessionOpt = sessionRepository.findByPhoneNumber(phoneNumber);
+        if (sessionOpt.isPresent()) {
+            TelegramSession session = sessionOpt.get();
+            session.setAuthState(authState);
+            session.setUpdatedTime(LocalDateTime.now());
+            sessionRepository.save(session);
+            logger.info("更新session认证状态: {} -> {}", phoneNumber, authState);
+        }
+    }
+
+    /**
+     * 更新session的认证状态
+     * 
+     * @param phoneNumber 手机号
+     * @param isAuthenticated 是否已认证
+     */
+    public void updateAuthenticationStatus(String phoneNumber, boolean isAuthenticated) {
+        Optional<TelegramSession> sessionOpt = sessionRepository.findByPhoneNumber(phoneNumber);
+        if (sessionOpt.isPresent()) {
+            TelegramSession session = sessionOpt.get();
+            session.setAuthState(isAuthenticated ? "READY" : "WAITING");
+            session.setUpdatedTime(LocalDateTime.now());
+            sessionRepository.save(session);
+            logger.info("更新session认证状态: {} -> {}", phoneNumber, isAuthenticated ? "已认证" : "未认证");
+        }
+    }
+
+    /**
+     * 保存session文件数据到MongoDB
+     * 
+     * @param phoneNumber 手机号码
+     * @param sessionPath session文件路径
+     */
+    public void saveSessionFiles(String phoneNumber, String sessionPath) {
+        try {
+            Optional<TelegramSession> sessionOpt = sessionRepository.findByPhoneNumber(phoneNumber);
+            if (!sessionOpt.isPresent()) {
+                logger.warn("未找到session，无法保存文件: {}", phoneNumber);
+                return;
+            }
+
+            TelegramSession session = sessionOpt.get();
+            
+            // 读取数据库文件
+            Map<String, String> databaseFiles = readSessionFiles(sessionPath);
+            session.setDatabaseFiles(databaseFiles);
+            
+            // 读取下载文件信息
+            Map<String, String> downloadedFiles = readDownloadedFiles(sessionPath + "/downloads");
+            session.setDownloadedFiles(downloadedFiles);
+            
+            session.setUpdatedTime(LocalDateTime.now());
+            sessionRepository.save(session);
+            
+            logger.info("保存session文件到MongoDB: {} (数据库文件: {}, 下载文件: {})", 
+                       phoneNumber, databaseFiles.size(), downloadedFiles.size());
+        } catch (Exception e) {
+            logger.error("保存session文件失败: " + phoneNumber, e);
+        }
+    }
+
+    /**
+     * 从MongoDB恢复session文件到本地
+     * 
+     * @param phoneNumber 手机号码
+     * @param sessionPath session文件路径
+     * @return 是否成功恢复
+     */
+    public boolean restoreSessionFiles(String phoneNumber, String sessionPath) {
+        try {
+            Optional<TelegramSession> sessionOpt = sessionRepository.findByPhoneNumber(phoneNumber);
+            if (!sessionOpt.isPresent()) {
+                logger.warn("未找到session，无法恢复文件: {}", phoneNumber);
+                return false;
+            }
+
+            TelegramSession session = sessionOpt.get();
+            
+            // 创建session目录
+            Path sessionDir = Paths.get(sessionPath);
+            Files.createDirectories(sessionDir);
+            
+            // 恢复数据库文件
+            if (session.getDatabaseFiles() != null) {
+                for (Map.Entry<String, String> entry : session.getDatabaseFiles().entrySet()) {
+                    String encodedPath = entry.getKey();
+                    String fileData = entry.getValue();
+                    
+                    // 将编码的路径解码回原始路径
+                    String relativePath = encodedPath.replace("__SLASH__", "/").replace("__DOT__", ".");
+                    
+                    Path filePath = sessionDir.resolve(relativePath);
+                    // 确保父目录存在
+                    Files.createDirectories(filePath.getParent());
+                    byte[] data = Base64.getDecoder().decode(fileData);
+                    Files.write(filePath, data);
+                    logger.debug("恢复数据库文件: {} -> {} (大小: {} bytes)", encodedPath, relativePath, data.length);
+                }
+                logger.info("恢复数据库文件: {} 个", session.getDatabaseFiles().size());
+            }
+            
+            // 恢复下载文件
+            if (session.getDownloadedFiles() != null) {
+                Path downloadsDir = sessionDir.resolve("downloads");
+                Files.createDirectories(downloadsDir);
+                
+                for (Map.Entry<String, String> entry : session.getDownloadedFiles().entrySet()) {
+                    String fileName = entry.getKey();
+                    String fileData = entry.getValue();
+                    
+                    Path filePath = downloadsDir.resolve(fileName);
+                    byte[] data = Base64.getDecoder().decode(fileData);
+                    Files.write(filePath, data);
+                }
+                logger.info("恢复下载文件: {} 个", session.getDownloadedFiles().size());
+            }
+            
+            logger.info("成功恢复session文件: {} -> {}", phoneNumber, sessionPath);
+            return true;
+        } catch (Exception e) {
+            logger.error("恢复session文件失败: " + phoneNumber, e);
+            return false;
+        }
+    }
+
+    /**
+     * 读取session目录下的文件
+     * 
+     * @param sessionPath session路径
+     * @return 文件名和Base64编码的文件内容映射
+     */
+    private Map<String, String> readSessionFiles(String sessionPath) throws IOException {
+        Map<String, String> files = new HashMap<>();
+        Path sessionDir = Paths.get(sessionPath);
+        
+        if (!Files.exists(sessionDir)) {
+            return files;
+        }
+        
+        // 递归搜索所有子目录，特别是database目录
+        try (Stream<Path> paths = Files.walk(sessionDir)) {
+            List<Path> fileList = paths
+                .filter(Files::isRegularFile)
+                .filter(path -> {
+                    String fileName = path.getFileName().toString();
+                    // 保存TDLib相关的所有重要文件，包括SQLite数据库文件
+                    return fileName.endsWith(".binlog") || 
+                           fileName.endsWith(".db") ||
+                           fileName.startsWith("db.sqlite") ||  // SQLite数据库文件
+                           fileName.equals("td.binlog") ||
+                           fileName.equals("config.json") ||
+                           fileName.endsWith(".sqlite") ||      // 其他SQLite文件
+                           fileName.endsWith(".sqlite-shm") ||  // SQLite共享内存文件
+                           fileName.endsWith(".sqlite-wal");    // SQLite预写日志文件
+                })
+                .collect(Collectors.toList());
+            
+            for (Path filePath : fileList) {
+                // 使用相对路径作为文件名，保持目录结构
+                String relativePath = sessionDir.relativize(filePath).toString();
+                // 将路径中的特殊字符进行编码，避免MongoDB key限制
+                String encodedPath = relativePath.replace("/", "__SLASH__").replace(".", "__DOT__");
+                byte[] fileData = Files.readAllBytes(filePath);
+                String encodedData = Base64.getEncoder().encodeToString(fileData);
+                files.put(encodedPath, encodedData);
+                logger.debug("读取session文件: {} -> {} (大小: {} bytes)", relativePath, encodedPath, fileData.length);
+            }
+        }
+        
+        logger.info("读取session文件完成，共 {} 个文件", files.size());
+        return files;
+    }
+
+    /**
+     * 读取下载文件目录
+     * 
+     * @param downloadsPath 下载路径
+     * @return 文件名和Base64编码的文件内容映射
+     */
+    private Map<String, String> readDownloadedFiles(String downloadsPath) throws IOException {
+        Map<String, String> files = new HashMap<>();
+        Path downloadsDir = Paths.get(downloadsPath);
+        
+        if (!Files.exists(downloadsDir)) {
+            return files;
+        }
+        
+        // 只读取小文件，避免内存溢出
+        try (Stream<Path> paths = Files.walk(downloadsDir)) {
+            List<Path> fileList = paths
+                .filter(Files::isRegularFile)
+                .filter(path -> {
+                    try {
+                        return Files.size(path) < 1024 * 1024; // 小于1MB的文件
+                    } catch (IOException e) {
+                        return false;
+                    }
+                })
+                .limit(100) // 最多100个文件
+                .collect(Collectors.toList());
+            
+            for (Path filePath : fileList) {
+                String fileName = filePath.getFileName().toString();
+                byte[] fileData = Files.readAllBytes(filePath);
+                String encodedData = Base64.getEncoder().encodeToString(fileData);
+                files.put(fileName, encodedData);
+            }
+        }
+        
+        return files;
+    }
+
+    /**
+     * 删除session
+     * 
+     * @param phoneNumber 手机号码
+     * @return 是否成功删除
+     */
+    public boolean deleteSession(String phoneNumber) {
+        try {
+            Optional<TelegramSession> sessionOpt = sessionRepository.findByPhoneNumber(phoneNumber);
+            if (sessionOpt.isPresent()) {
+                sessionRepository.delete(sessionOpt.get());
+                logger.info("删除session: {}", phoneNumber);
+                return true;
+            }
+            logger.warn("未找到要删除的session: {}", phoneNumber);
+            return false;
+        } catch (Exception e) {
+            logger.error("删除session失败: " + phoneNumber, e);
+            return false;
+        }
+    }
+
+    /**
+     * 获取可用的session（已认证且非活跃）
+     * 
+     * @return session列表
+     */
+    public List<TelegramSession> getAvailableSessions() {
+        return sessionRepository.findAvailableSessions();
+    }
+
+    /**
+     * 获取当前实例的活跃session
+     * 
+     * @return session列表
+     */
+    public List<TelegramSession> getCurrentInstanceSessions() {
+        return sessionRepository.findByInstanceIdAndIsActiveTrue(instanceId);
+    }
+
+    /**
+     * 清理过期的session
+     * 
+     * @return 清理的session数量
+     */
+    public int cleanupExpiredSessions() {
+        try {
+            LocalDateTime threshold = LocalDateTime.now().minusHours(inactiveTimeoutHours);
+            List<TelegramSession> expiredSessions = sessionRepository.findSessionsToCleanup(threshold);
+            
+            int cleanedCount = 0;
+            for (TelegramSession session : expiredSessions) {
+                if (!session.getIsActive()) {
+                    sessionRepository.delete(session);
+                    cleanedCount++;
+                    logger.info("清理过期session: {}", session.getPhoneNumber());
+                }
+            }
+            
+            logger.info("清理过期session完成，共清理 {} 个", cleanedCount);
+            return cleanedCount;
+        } catch (Exception e) {
+            logger.error("清理过期session失败", e);
+            return 0;
+        }
+    }
+
+    /**
+     * 获取实例ID
+     * 
+     * @return 实例ID
+     */
+    public String getInstanceId() {
+        return instanceId;
+    }
+
+    /**
+     * 获取session统计信息
+     * 
+     * @return 统计信息
+     */
+    public Map<String, Object> getSessionStats() {
+        Map<String, Object> stats = new HashMap<>();
+        
+        try {
+            long totalSessions = sessionRepository.count();
+            long activeSessions = sessionRepository.countByIsActiveTrue();
+            long currentInstanceSessions = sessionRepository.countByInstanceIdAndIsActiveTrue(instanceId);
+            
+            stats.put("totalSessions", totalSessions);
+            stats.put("activeSessions", activeSessions);
+            stats.put("currentInstanceSessions", currentInstanceSessions);
+            stats.put("instanceId", instanceId);
+            
+            // 按认证状态统计
+            List<TelegramSession> allSessions = sessionRepository.findAll();
+            Map<String, Long> authStateStats = allSessions.stream()
+                .collect(Collectors.groupingBy(
+                    session -> session.getAuthState() != null ? session.getAuthState() : "UNKNOWN",
+                    Collectors.counting()
+                ));
+            stats.put("authStateStats", authStateStats);
+            
+        } catch (Exception e) {
+            logger.error("获取session统计信息失败", e);
+            stats.put("error", e.getMessage());
+        }
+        
+        return stats;
+    }
+}

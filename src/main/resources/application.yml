@@ -3,12 +3,27 @@ spring:
   application:
     name: magic-telegram-server
   
+  # MongoDB配置
+  data:
+    mongodb:
+      uri: mongodb://admin:fanzha2024@10.16.139.40:27017/db_telegrame?authSource=admin
+      # 连接池配置
+      options:
+        max-connection-pool-size: 20
+        min-connection-pool-size: 5
+        max-connection-idle-time: 30000
+        max-connection-life-time: 60000
+        connect-timeout: 10000
+        socket-timeout: 30000
+        server-selection-timeout: 5000
+  
   # 日志配置
   logging:
     level:
       com.telegram.server: INFO
       it.tdlight: INFO
       root: INFO
+      org.springframework.data.mongodb: DEBUG
     pattern:
       console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
       file: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
@@ -25,7 +40,8 @@ server:
 
 # Telegram配置
 telegram:
-  session-path: telegram-session
+  session:
+    path: ${java.io.tmpdir}/telegram-session  # 使用系统临时目录，主要依赖MongoDB存储
   proxy:
     enabled: true
     host: 127.0.0.1
