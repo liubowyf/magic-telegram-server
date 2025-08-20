@@ -95,17 +95,17 @@ public class TelegramSession {
     private String storageVersion = "v1";
 
     /**
-     * 是否启用分片存储
-     * true: 使用分片存储，数据存储在SessionShard集合中
+     * 是否启用GridFS存储
+     * true: 使用GridFS存储，大文件数据存储在GridFS中
      * false: 使用传统存储，数据存储在当前文档的databaseFiles和downloadedFiles字段中
      */
     @Field("shard_enabled")
     private Boolean shardEnabled = false;
 
     /**
-     * 分片引用列表
-     * 当启用分片存储时，存储所有相关分片的ID列表
-     * 格式：["shard_id_1", "shard_id_2", ...]
+     * GridFS文件引用列表（保留字段以兼容旧数据）
+     * 当启用GridFS存储时，可能存储相关GridFS文件的ID列表
+     * 格式：["gridfs_id_1", "gridfs_id_2", ...]
      */
     @Field("shard_refs")
     private java.util.List<String> shardRefs;
