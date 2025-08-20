@@ -1,6 +1,7 @@
-package com.telegram.server.service;
+package com.telegram.server.service.impl;
 
 import com.telegram.server.entity.TelegramMessage;
+import com.telegram.server.service.ITelegramMessageService;
 import com.telegram.server.repository.TelegramMessageRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -49,9 +50,9 @@ import java.util.concurrent.atomic.AtomicLong;
  */
 @Service
 @Transactional
-public class TelegramMessageService {
+public class TelegramMessageServiceImpl implements ITelegramMessageService {
 
-    private static final Logger logger = LoggerFactory.getLogger(TelegramMessageService.class);
+    private static final Logger logger = LoggerFactory.getLogger(TelegramMessageServiceImpl.class);
 
     @Autowired
     private TelegramMessageRepository messageRepository;
@@ -202,47 +203,95 @@ public class TelegramMessageService {
 
         try {
             // 检查消息是否已存在（去重）
-            if (config.isDeduplicationEnabled() && isMessageExists(message.getAccountPhone(), message.getChatId(), message.getMessageId())) {
-                if (config.isVerboseLogging()) {
-                    logger.debug("消息已存在，跳过保存: accountPhone={}, chatId={}, messageId={}", 
-                        message.getAccountPhone(), message.getChatId(), message.getMessageId());
-                }
-                duplicateMessageCount.incrementAndGet();
-                monitor.recordDuplicateMessage();
+            if (isDuplicateMessage(message)) {
                 return CompletableFuture.completedFuture(false);
             }
             
-            // 设置实例ID和创建时间
-            message.setInstanceId(instanceId);
-            message.updateCreatedTime();
+            // 准备并保存消息
+            TelegramMessage savedMessage = prepareSaveMessage(message);
             
-            // 保存消息
-            TelegramMessage savedMessage = messageRepository.save(message);
-            
-            // 更新统计计数器
-            processedMessageCount.incrementAndGet();
-            savedMessageCount.incrementAndGet();
-            monitor.recordSavedMessage();
-            
-            if (config.isVerboseLogging()) {
-                long endTime = System.currentTimeMillis();
-                logger.info("消息保存成功: accountPhone={}, chatId={}, messageId={}, chatTitle={}, messageType={}, 耗时={}ms", 
-                    savedMessage.getAccountPhone(), savedMessage.getChatId(), savedMessage.getMessageId(),
-                    savedMessage.getChatTitle(), savedMessage.getMessageType(), (endTime - startTime));
-            }
+            // 更新统计和记录日志
+            updateSaveStatistics();
+            logSaveSuccess(savedMessage, startTime);
             
             return CompletableFuture.completedFuture(true);
             
         } catch (Exception e) {
-            logger.error("消息保存失败: accountPhone={}, chatId={}, messageId={}, error={}", 
-                message.getAccountPhone(), message.getChatId(), message.getMessageId(), e.getMessage(), e);
+            logSaveFailure(message, e);
             monitor.recordFailedMessage();
             return CompletableFuture.completedFuture(false);
         } finally {
-            // 记录处理时间
-            long processingTime = System.currentTimeMillis() - startTime;
-            monitor.recordProcessingTime(processingTime);
+            recordProcessingTime(startTime);
         }
+    }
+    
+    /**
+     * 检查消息是否为重复消息
+     * 
+     * @param message 待检查的消息
+     * @return 如果是重复消息返回true
+     */
+    private boolean isDuplicateMessage(TelegramMessage message) {
+        if (config.isDeduplicationEnabled() && isMessageExists(message.getAccountPhone(), message.getChatId(), message.getMessageId())) {
+            if (config.isVerboseLogging()) {
+                logger.debug("消息已存在，跳过保存: accountPhone={}, chatId={}, messageId={}", 
+                    message.getAccountPhone(), message.getChatId(), message.getMessageId());
+            }
+            duplicateMessageCount.incrementAndGet();
+            monitor.recordDuplicateMessage();
+            return true;
+        }
+        return false;
+    }
+    
+    /**
+     * 准备并保存消息
+     * 
+     * @param message 待保存的消息
+     * @return 保存后的消息
+     */
+    private TelegramMessage prepareSaveMessage(TelegramMessage message) {
+        // 设置实例ID和创建时间
+        message.setInstanceId(instanceId);
+        message.updateCreatedTime();
+        
+        // 保存消息
+        return messageRepository.save(message);
+    }
+    
+    /**
+     * 更新保存统计信息
+     */
+    private void updateSaveStatistics() {
+        processedMessageCount.incrementAndGet();
+        savedMessageCount.incrementAndGet();
+        monitor.recordSavedMessage();
+    }
+    
+    /**
+     * 记录保存成功日志
+     * 
+     * @param savedMessage 保存成功的消息
+     * @param startTime 开始时间
+     */
+    private void logSaveSuccess(TelegramMessage savedMessage, long startTime) {
+        if (config.isVerboseLogging()) {
+            long endTime = System.currentTimeMillis();
+            logger.info("消息保存成功: accountPhone={}, chatId={}, messageId={}, chatTitle={}, messageType={}, 耗时={}ms", 
+                savedMessage.getAccountPhone(), savedMessage.getChatId(), savedMessage.getMessageId(),
+                savedMessage.getChatTitle(), savedMessage.getMessageType(), (endTime - startTime));
+        }
+    }
+    
+    /**
+     * 记录保存失败日志
+     * 
+     * @param message 保存失败的消息
+     * @param e 异常信息
+     */
+    private void logSaveFailure(TelegramMessage message, Exception e) {
+        logger.error("消息保存失败: accountPhone={}, chatId={}, messageId={}, error={}", 
+            message.getAccountPhone(), message.getChatId(), message.getMessageId(), e.getMessage(), e);
     }
 
     /**
@@ -311,81 +360,187 @@ public class TelegramMessageService {
         }
         
         long startTime = System.currentTimeMillis();
-        
-        // 记录接收到的消息数量
-        for (int i = 0; i < messages.size(); i++) {
-            monitor.recordReceivedMessage();
-        }
+        recordReceivedMessages(messages.size());
         
         try {
-            int savedCount = 0;
-            final AtomicLong duplicateCountLocal = new AtomicLong(0);
+            BatchSaveResult result = processBatchSave(messages);
+            updateStatistics(messages.size(), result.savedCount, result.duplicateCount);
+            logBatchSaveResult(messages.size(), result.savedCount, result.duplicateCount, startTime);
             
-            // 设置实例ID和创建时间
-            for (TelegramMessage message : messages) {
-                message.setInstanceId(instanceId);
-                message.updateCreatedTime();
-            }
-            
-            // 过滤重复消息（如果启用去重）
-            List<TelegramMessage> uniqueMessages;
-            if (config.isDeduplicationEnabled()) {
-                uniqueMessages = messages.stream()
-                    .filter(message -> {
-                        if (isMessageExists(message.getAccountPhone(), message.getChatId(), message.getMessageId())) {
-                            duplicateCountLocal.incrementAndGet();
-                            return false;
-                        }
-                        return true;
-                    })
-                    .toList();
-            } else {
-                uniqueMessages = messages;
-            }
-            
-            // 批量保存
-            if (!uniqueMessages.isEmpty()) {
-                List<TelegramMessage> savedMessages = messageRepository.saveAll(uniqueMessages);
-                savedCount = savedMessages.size();
-                
-                // 记录保存成功的消息数量
-                for (int i = 0; i < savedCount; i++) {
-                    monitor.recordSavedMessage();
-                }
-            }
-            
-            // 记录重复消息数量
-            long duplicateCountValue = duplicateCountLocal.get();
-            for (int i = 0; i < duplicateCountValue; i++) {
-                monitor.recordDuplicateMessage();
-            }
-            
-            // 更新统计计数器
-            processedMessageCount.addAndGet(messages.size());
-            savedMessageCount.addAndGet(savedCount);
-            duplicateMessageCount.addAndGet(duplicateCountValue);
-            
-            if (config.isVerboseLogging()) {
-                long endTime = System.currentTimeMillis();
-                logger.info("批量消息保存完成: 总数={}, 保存={}, 重复={}, 耗时={}ms", 
-                    messages.size(), savedCount, duplicateCountValue, (endTime - startTime));
-            }
-            
-            return CompletableFuture.completedFuture(savedCount);
+            return CompletableFuture.completedFuture(result.savedCount);
             
         } catch (Exception e) {
             logger.error("批量消息保存失败: 消息数量={}, error={}", messages.size(), e.getMessage(), e);
-            
-            // 记录失败的消息数量
-            for (int i = 0; i < messages.size(); i++) {
-                monitor.recordFailedMessage();
-            }
-            
+            recordFailedMessages(messages.size());
             return CompletableFuture.completedFuture(0);
         } finally {
-            // 记录处理时间
-            long processingTime = System.currentTimeMillis() - startTime;
-            monitor.recordProcessingTime(processingTime);
+            recordProcessingTime(startTime);
+        }
+    }
+    
+    /**
+     * 记录接收到的消息数量
+     * 
+     * @param messageCount 消息数量
+     */
+    private void recordReceivedMessages(int messageCount) {
+        for (int i = 0; i < messageCount; i++) {
+            monitor.recordReceivedMessage();
+        }
+    }
+    
+    /**
+     * 处理批量保存逻辑
+     * 
+     * @param messages 待保存的消息列表
+     * @return 批量保存结果
+     */
+    private BatchSaveResult processBatchSave(List<TelegramMessage> messages) {
+        final AtomicLong duplicateCountLocal = new AtomicLong(0);
+        
+        // 设置实例ID和创建时间
+        prepareMessagesForSave(messages);
+        
+        // 过滤重复消息（如果启用去重）
+        List<TelegramMessage> uniqueMessages = filterDuplicateMessages(messages, duplicateCountLocal);
+        
+        // 批量保存
+        int savedCount = saveUniqueMessages(uniqueMessages);
+        
+        // 记录重复消息数量
+        long duplicateCount = duplicateCountLocal.get();
+        recordDuplicateMessages((int) duplicateCount);
+        
+        return new BatchSaveResult(savedCount, (int) duplicateCount);
+    }
+    
+    /**
+     * 为消息设置实例ID和创建时间
+     * 
+     * @param messages 消息列表
+     */
+    private void prepareMessagesForSave(List<TelegramMessage> messages) {
+        for (TelegramMessage message : messages) {
+            message.setInstanceId(instanceId);
+            message.updateCreatedTime();
+        }
+    }
+    
+    /**
+     * 过滤重复消息
+     * 
+     * @param messages 原始消息列表
+     * @param duplicateCountLocal 重复消息计数器
+     * @return 去重后的消息列表
+     */
+    private List<TelegramMessage> filterDuplicateMessages(List<TelegramMessage> messages, AtomicLong duplicateCountLocal) {
+        if (config.isDeduplicationEnabled()) {
+            return messages.stream()
+                .filter(message -> {
+                    if (isMessageExists(message.getAccountPhone(), message.getChatId(), message.getMessageId())) {
+                        duplicateCountLocal.incrementAndGet();
+                        return false;
+                    }
+                    return true;
+                })
+                .toList();
+        } else {
+            return messages;
+        }
+    }
+    
+    /**
+     * 保存唯一消息
+     * 
+     * @param uniqueMessages 去重后的消息列表
+     * @return 保存成功的消息数量
+     */
+    private int saveUniqueMessages(List<TelegramMessage> uniqueMessages) {
+        if (!uniqueMessages.isEmpty()) {
+            List<TelegramMessage> savedMessages = messageRepository.saveAll(uniqueMessages);
+            int savedCount = savedMessages.size();
+            
+            // 记录保存成功的消息数量
+            for (int i = 0; i < savedCount; i++) {
+                monitor.recordSavedMessage();
+            }
+            
+            return savedCount;
+        }
+        return 0;
+    }
+    
+    /**
+     * 记录重复消息数量
+     * 
+     * @param duplicateCount 重复消息数量
+     */
+    private void recordDuplicateMessages(int duplicateCount) {
+        for (int i = 0; i < duplicateCount; i++) {
+            monitor.recordDuplicateMessage();
+        }
+    }
+    
+    /**
+     * 记录失败消息数量
+     * 
+     * @param messageCount 失败消息数量
+     */
+    private void recordFailedMessages(int messageCount) {
+        for (int i = 0; i < messageCount; i++) {
+            monitor.recordFailedMessage();
+        }
+    }
+    
+    /**
+     * 更新统计计数器
+     * 
+     * @param totalCount 总消息数量
+     * @param savedCount 保存成功数量
+     * @param duplicateCount 重复消息数量
+     */
+    private void updateStatistics(int totalCount, int savedCount, int duplicateCount) {
+        processedMessageCount.addAndGet(totalCount);
+        savedMessageCount.addAndGet(savedCount);
+        duplicateMessageCount.addAndGet(duplicateCount);
+    }
+    
+    /**
+     * 记录批量保存结果日志
+     * 
+     * @param totalCount 总消息数量
+     * @param savedCount 保存成功数量
+     * @param duplicateCount 重复消息数量
+     * @param startTime 开始时间
+     */
+    private void logBatchSaveResult(int totalCount, int savedCount, int duplicateCount, long startTime) {
+        if (config.isVerboseLogging()) {
+            long endTime = System.currentTimeMillis();
+            logger.info("批量消息保存完成: 总数={}, 保存={}, 重复={}, 耗时={}ms", 
+                totalCount, savedCount, duplicateCount, (endTime - startTime));
+        }
+    }
+    
+    /**
+     * 记录处理时间
+     * 
+     * @param startTime 开始时间
+     */
+    private void recordProcessingTime(long startTime) {
+        long processingTime = System.currentTimeMillis() - startTime;
+        monitor.recordProcessingTime(processingTime);
+    }
+    
+    /**
+     * 批量保存结果内部类
+     */
+    private static class BatchSaveResult {
+        final int savedCount;
+        final int duplicateCount;
+        
+        BatchSaveResult(int savedCount, int duplicateCount) {
+            this.savedCount = savedCount;
+            this.duplicateCount = duplicateCount;
         }
     }
 
@@ -651,12 +806,12 @@ public class TelegramMessageService {
      * 
      * @return 性能统计信息
      */
-    public ProcessingStats getProcessingStats() {
-        return new ProcessingStats(
+    public ITelegramMessageService.ProcessingStats getProcessingStats() {
+        return new ITelegramMessageService.ProcessingStats(
             processedMessageCount.get(),
             savedMessageCount.get(),
             duplicateMessageCount.get(),
-            instanceId
+            0.0 // averageProcessingTime placeholder
         );
     }
 
@@ -670,45 +825,4 @@ public class TelegramMessageService {
         logger.info("性能统计计数器已重置");
     }
 
-    // ==================== 内部类 ====================
-    
-    /**
-     * 处理性能统计信息
-     */
-    public static class ProcessingStats {
-        private final long processedCount;
-        private final long savedCount;
-        private final long duplicateCount;
-        private final String instanceId;
-        private final LocalDateTime timestamp;
-
-        public ProcessingStats(long processedCount, long savedCount, long duplicateCount, String instanceId) {
-            this.processedCount = processedCount;
-            this.savedCount = savedCount;
-            this.duplicateCount = duplicateCount;
-            this.instanceId = instanceId;
-            this.timestamp = LocalDateTime.now();
-        }
-
-        // Getter方法
-        public long getProcessedCount() { return processedCount; }
-        public long getSavedCount() { return savedCount; }
-        public long getDuplicateCount() { return duplicateCount; }
-        public String getInstanceId() { return instanceId; }
-        public LocalDateTime getTimestamp() { return timestamp; }
-        
-        public double getSuccessRate() {
-            return processedCount > 0 ? (double) savedCount / processedCount * 100 : 0;
-        }
-        
-        public double getDuplicateRate() {
-            return processedCount > 0 ? (double) duplicateCount / processedCount * 100 : 0;
-        }
-
-        @Override
-        public String toString() {
-            return String.format("ProcessingStats{processed=%d, saved=%d, duplicate=%d, successRate=%.2f%%, duplicateRate=%.2f%%, instance=%s, timestamp=%s}",
-                processedCount, savedCount, duplicateCount, getSuccessRate(), getDuplicateRate(), instanceId, timestamp);
-        }
-    }
 }

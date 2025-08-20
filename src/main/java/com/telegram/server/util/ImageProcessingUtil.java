@@ -117,28 +117,7 @@ public class ImageProcessingUtil {
         }
     }
 
-    /**
-     * 获取文件大小
-     * 
-     * @param filePath 文件路径
-     * @return 文件大小（字节），失败返回-1
-     */
-    public long getFileSize(String filePath) {
-        if (filePath == null || filePath.trim().isEmpty()) {
-            return -1;
-        }
-        
-        try {
-            Path path = Paths.get(filePath);
-            if (!Files.exists(path)) {
-                return -1;
-            }
-            return Files.size(path);
-        } catch (IOException e) {
-            logger.error("获取文件大小失败: {}", filePath, e);
-            return -1;
-        }
-    }
+
 
     /**
      * 检测图片文件的MIME类型
@@ -232,30 +211,7 @@ public class ImageProcessingUtil {
         }
     }
 
-    /**
-     * 生成唯一的文件名
-     * 
-     * @param originalFileName 原始文件名
-     * @param messageId 消息ID
-     * @param chatId 聊天ID
-     * @return 唯一文件名
-     */
-    public String generateUniqueFileName(String originalFileName, Long messageId, Long chatId) {
-        if (originalFileName == null || originalFileName.trim().isEmpty()) {
-            originalFileName = "image";
-        }
-        
-        // 提取文件扩展名
-        String extension = "";
-        int lastDotIndex = originalFileName.lastIndexOf('.');
-        if (lastDotIndex > 0 && lastDotIndex < originalFileName.length() - 1) {
-            extension = originalFileName.substring(lastDotIndex);
-        }
-        
-        // 生成唯一文件名：chatId_messageId_timestamp.extension
-        long timestamp = System.currentTimeMillis();
-        return String.format("%d_%d_%d%s", chatId, messageId, timestamp, extension);
-    }
+
 
     /**
      * 检查文件是否存在
@@ -301,27 +257,5 @@ public class ImageProcessingUtil {
         }
     }
 
-    /**
-     * 创建目录
-     * 
-     * @param dirPath 目录路径
-     * @return 是否创建成功
-     */
-    public boolean createDirectory(String dirPath) {
-        if (dirPath == null || dirPath.trim().isEmpty()) {
-            return false;
-        }
-        
-        try {
-            Path path = Paths.get(dirPath);
-            if (!Files.exists(path)) {
-                Files.createDirectories(path);
-                logger.debug("目录创建成功: {}", dirPath);
-            }
-            return true;
-        } catch (IOException e) {
-            logger.error("目录创建失败: {}", dirPath, e);
-            return false;
-        }
-    }
+
 }

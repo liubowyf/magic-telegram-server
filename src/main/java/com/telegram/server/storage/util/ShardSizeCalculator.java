@@ -1,4 +1,4 @@
-package com.magictelegram.util;
+package com.telegram.server.storage.util;
 
 /**
  * 分片大小计算器

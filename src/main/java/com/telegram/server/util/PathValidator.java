@@ -494,29 +494,9 @@ public class PathValidator {
         logger.info("Cleared path validation cache, removed {} entries", size);
     }
     
-    /**
-     * 获取验证缓存统计信息
-     * 
-     * @return 缓存统计信息
-     */
-    public String getValidationCacheStats() {
-        return String.format("Path Validation Cache: size=%d", validationCache.size());
-    }
+
     
-    /**
-     * 检查路径是否为安全路径
-     * 
-     * @param pathString 路径字符串
-     * @return 是否安全
-     */
-    public boolean isSafePath(String pathString) {
-        if (pathString == null || pathString.trim().isEmpty()) {
-            return false;
-        }
-        
-        ValidationResult securityCheck = performSecurityCheck(pathString.trim());
-        return securityCheck.isValid();
-    }
+
     
     /**
      * 获取系统临时目录
@@ -527,37 +507,5 @@ public class PathValidator {
         return System.getProperty("java.io.tmpdir");
     }
     
-    /**
-     * 在系统临时目录下创建子目录
-     * 
-     * @param subdirectory 子目录名称
-     * @return 创建结果
-     */
-    public ValidationResult createTempSubdirectory(String subdirectory) {
-        if (subdirectory == null || subdirectory.trim().isEmpty()) {
-            return ValidationResult.failure("Subdirectory name cannot be null or empty");
-        }
-        
-        String tempDir = getSystemTempDirectory();
-        String fullPath = Paths.get(tempDir, subdirectory.trim()).toString();
-        
-        return ensureDirectoryExists(fullPath);
-    }
-    
-    /**
-     * 获取路径验证和处理的详细信息
-     * 
-     * @return 详细信息字符串
-     */
-    public String getPathValidatorInfo() {
-        StringBuilder sb = new StringBuilder("PathValidator Info:\n");
-        sb.append("  System Temp Directory: ").append(getSystemTempDirectory()).append("\n");
-        sb.append("  Validation Cache Size: ").append(validationCache.size()).append("\n");
-        sb.append("  Dangerous Patterns Count: ").append(DANGEROUS_PATTERNS.size()).append("\n");
-        sb.append("  Allowed Root Patterns Count: ").append(ALLOWED_ROOT_PATTERNS.size()).append("\n");
-        sb.append("  Current Working Directory: ").append(System.getProperty("user.dir")).append("\n");
-        sb.append("  User Home Directory: ").append(System.getProperty("user.home")).append("\n");
-        
-        return sb.toString();
-    }
+
 }

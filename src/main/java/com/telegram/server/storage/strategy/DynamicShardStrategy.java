@@ -1,6 +1,6 @@
-package com.magictelegram.strategy;
+package com.telegram.server.storage.strategy;
 
-import com.magictelegram.util.ShardSizeCalculator;
+import com.telegram.server.storage.util.ShardSizeCalculator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;

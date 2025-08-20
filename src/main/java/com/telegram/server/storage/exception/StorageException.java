@@ -1,4 +1,4 @@
-package com.magictelegram.exception;
+package com.telegram.server.storage.exception;
 
 /**
  * 存储异常类

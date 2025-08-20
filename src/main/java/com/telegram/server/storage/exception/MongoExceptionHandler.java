@@ -1,4 +1,4 @@
-package com.magictelegram.exception;
+package com.telegram.server.storage.exception;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

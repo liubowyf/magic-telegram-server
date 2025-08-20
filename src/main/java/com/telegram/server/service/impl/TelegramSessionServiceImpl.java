@@ -1,8 +1,9 @@
-package com.telegram.server.service;
+package com.telegram.server.service.impl;
 
 import com.telegram.server.entity.TelegramSession;
+import com.telegram.server.service.ITelegramSessionService;
 import com.telegram.server.repository.TelegramSessionRepository;
-import com.telegram.server.service.GridFSStorageManager;
+import com.telegram.server.service.gridfs.GridFSStorageManager;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -44,9 +45,9 @@ import java.util.stream.Stream;
  */
 @Service
 @Transactional
-public class TelegramSessionService {
+public class TelegramSessionServiceImpl implements ITelegramSessionService {
 
-    private static final Logger logger = LoggerFactory.getLogger(TelegramSessionService.class);
+    private static final Logger logger = LoggerFactory.getLogger(TelegramSessionServiceImpl.class);
 
     @Autowired
     private TelegramSessionRepository sessionRepository;
@@ -152,6 +153,16 @@ public class TelegramSessionService {
     }
 
     /**
+     * 根据手机号查找session（别名方法）
+     * 
+     * @param phoneNumber 手机号码
+     * @return session对象
+     */
+    public Optional<TelegramSession> findByPhoneNumber(String phoneNumber) {
+        return getSessionByPhoneNumber(phoneNumber);
+    }
+
+    /**
      * 激活session
      * 
      * @param phoneNumber 手机号码
@@ -232,31 +243,54 @@ public class TelegramSessionService {
      */
     public void saveSessionFiles(String phoneNumber, String sessionPath) {
         try {
-            Optional<TelegramSession> sessionOpt = sessionRepository.findByPhoneNumber(phoneNumber);
-            if (!sessionOpt.isPresent()) {
-                logger.warn("未找到session，无法保存文件: {}", phoneNumber);
+            TelegramSession session = validateAndGetSession(phoneNumber);
+            if (session == null) {
                 return;
             }
 
-            TelegramSession session = sessionOpt.get();
-            
-            // 读取数据库文件
             Map<String, String> databaseFiles = readSessionFiles(sessionPath);
-            
-            // 读取下载文件信息
             Map<String, String> downloadedFiles = readDownloadedFiles(sessionPath + "/downloads");
             
-            // 使用GridFSStorageManager存储数据
-            session = gridfsStorageManager.storeSession(session, databaseFiles, downloadedFiles);
-            
-            session.setUpdatedTime(LocalDateTime.now());
-            sessionRepository.save(session);
-            
-            logger.info("保存session文件到MongoDB: {} (数据库文件: {}, 下载文件: {})", 
-                       phoneNumber, databaseFiles.size(), downloadedFiles.size());
+            saveSessionToStorage(session, databaseFiles, downloadedFiles, phoneNumber);
+        } catch (IOException e) {
+            logger.error("读取session文件失败: " + phoneNumber, e);
         } catch (Exception e) {
             logger.error("保存session文件失败: " + phoneNumber, e);
         }
+    }
+
+    /**
+     * 验证并获取session
+     * 
+     * @param phoneNumber 手机号码
+     * @return session对象，如果不存在则返回null
+     */
+    private TelegramSession validateAndGetSession(String phoneNumber) {
+        Optional<TelegramSession> sessionOpt = sessionRepository.findByPhoneNumber(phoneNumber);
+        if (!sessionOpt.isPresent()) {
+            logger.warn("未找到session，无法保存文件: {}", phoneNumber);
+            return null;
+        }
+        return sessionOpt.get();
+    }
+
+    /**
+     * 保存session到存储
+     * 
+     * @param session session对象
+     * @param databaseFiles 数据库文件
+     * @param downloadedFiles 下载文件
+     * @param phoneNumber 手机号码
+     * @throws IOException 如果存储过程中发生IO异常
+     */
+    private void saveSessionToStorage(TelegramSession session, Map<String, String> databaseFiles, 
+                                    Map<String, String> downloadedFiles, String phoneNumber) throws IOException {
+        session = gridfsStorageManager.storeSession(session, databaseFiles, downloadedFiles);
+        session.setUpdatedTime(LocalDateTime.now());
+        sessionRepository.save(session);
+        
+        logger.info("保存session文件到MongoDB: {} (数据库文件: {}, 下载文件: {})", 
+                   phoneNumber, databaseFiles.size(), downloadedFiles.size());
     }
 
     /**
@@ -268,55 +302,16 @@ public class TelegramSessionService {
      */
     public boolean restoreSessionFiles(String phoneNumber, String sessionPath) {
         try {
-            Optional<TelegramSession> sessionOpt = sessionRepository.findByPhoneNumber(phoneNumber);
-            if (!sessionOpt.isPresent()) {
-                logger.warn("未找到session，无法恢复文件: {}", phoneNumber);
+            TelegramSession session = validateAndGetSessionForRestore(phoneNumber);
+            if (session == null) {
                 return false;
             }
 
-            TelegramSession session = sessionOpt.get();
-            
-            // 创建session目录
-            Path sessionDir = Paths.get(sessionPath);
-            Files.createDirectories(sessionDir);
-            
-            // 使用GridFSStorageManager加载完整的session数据
+            Path sessionDir = createSessionDirectory(sessionPath);
             session = gridfsStorageManager.loadSession(session.getId());
             
-            // 恢复数据库文件
-            if (session.getDatabaseFiles() != null) {
-                for (Map.Entry<String, String> entry : session.getDatabaseFiles().entrySet()) {
-                    String encodedPath = entry.getKey();
-                    String fileData = entry.getValue();
-                    
-                    // 将编码的路径解码回原始路径
-                    String relativePath = encodedPath.replace("__SLASH__", "/").replace("__DOT__", ".");
-                    
-                    Path filePath = sessionDir.resolve(relativePath);
-                    // 确保父目录存在
-                    Files.createDirectories(filePath.getParent());
-                    byte[] data = Base64.getDecoder().decode(fileData);
-                    Files.write(filePath, data);
-                    logger.debug("恢复数据库文件: {} -> {} (大小: {} bytes)", encodedPath, relativePath, data.length);
-                }
-                logger.info("恢复数据库文件: {} 个", session.getDatabaseFiles().size());
-            }
-            
-            // 恢复下载文件
-            if (session.getDownloadedFiles() != null) {
-                Path downloadsDir = sessionDir.resolve("downloads");
-                Files.createDirectories(downloadsDir);
-                
-                for (Map.Entry<String, String> entry : session.getDownloadedFiles().entrySet()) {
-                    String fileName = entry.getKey();
-                    String fileData = entry.getValue();
-                    
-                    Path filePath = downloadsDir.resolve(fileName);
-                    byte[] data = Base64.getDecoder().decode(fileData);
-                    Files.write(filePath, data);
-                }
-                logger.info("恢复下载文件: {} 个", session.getDownloadedFiles().size());
-            }
+            restoreDatabaseFiles(session, sessionDir);
+            restoreDownloadFiles(session, sessionDir);
             
             logger.info("成功恢复session文件: {} -> {}", phoneNumber, sessionPath);
             return true;
@@ -324,6 +319,98 @@ public class TelegramSessionService {
             logger.error("恢复session文件失败: " + phoneNumber, e);
             return false;
         }
+    }
+
+    /**
+     * 验证并获取session用于恢复
+     * 
+     * @param phoneNumber 手机号码
+     * @return session对象，如果不存在则返回null
+     */
+    private TelegramSession validateAndGetSessionForRestore(String phoneNumber) {
+        Optional<TelegramSession> sessionOpt = sessionRepository.findByPhoneNumber(phoneNumber);
+        if (!sessionOpt.isPresent()) {
+            logger.warn("未找到session，无法恢复文件: {}", phoneNumber);
+            return null;
+        }
+        return sessionOpt.get();
+    }
+
+    /**
+     * 创建session目录
+     * 
+     * @param sessionPath session路径
+     * @return 创建的目录路径
+     * @throws IOException 如果创建目录失败
+     */
+    private Path createSessionDirectory(String sessionPath) throws IOException {
+        Path sessionDir = Paths.get(sessionPath);
+        Files.createDirectories(sessionDir);
+        return sessionDir;
+    }
+
+    /**
+     * 恢复数据库文件
+     * 
+     * @param session session对象
+     * @param sessionDir session目录
+     * @throws IOException 如果恢复文件失败
+     */
+    private void restoreDatabaseFiles(TelegramSession session, Path sessionDir) throws IOException {
+        if (session.getDatabaseFiles() == null) {
+            return;
+        }
+
+        for (Map.Entry<String, String> entry : session.getDatabaseFiles().entrySet()) {
+            String encodedPath = entry.getKey();
+            String fileData = entry.getValue();
+            
+            String relativePath = decodePath(encodedPath);
+            Path filePath = sessionDir.resolve(relativePath);
+            
+            Files.createDirectories(filePath.getParent());
+            byte[] data = Base64.getDecoder().decode(fileData);
+            Files.write(filePath, data);
+            
+            logger.debug("恢复数据库文件: {} -> {} (大小: {} bytes)", encodedPath, relativePath, data.length);
+        }
+        logger.info("恢复数据库文件: {} 个", session.getDatabaseFiles().size());
+    }
+
+    /**
+     * 恢复下载文件
+     * 
+     * @param session session对象
+     * @param sessionDir session目录
+     * @throws IOException 如果恢复文件失败
+     */
+    private void restoreDownloadFiles(TelegramSession session, Path sessionDir) throws IOException {
+        if (session.getDownloadedFiles() == null) {
+            return;
+        }
+
+        Path downloadsDir = sessionDir.resolve("downloads");
+        Files.createDirectories(downloadsDir);
+        
+        for (Map.Entry<String, String> entry : session.getDownloadedFiles().entrySet()) {
+            String fileName = entry.getKey();
+            String fileData = entry.getValue();
+            
+            Path filePath = downloadsDir.resolve(fileName);
+            byte[] data = Base64.getDecoder().decode(fileData);
+            Files.write(filePath, data);
+        }
+        logger.info("恢复下载文件: {} 个", session.getDownloadedFiles().size());
+    }
+
+    /**
+     * 解码路径
+     * 
+     * @param encodedPath 编码的路径
+     * @return 解码后的路径
+     */
+    private String decodePath(String encodedPath) {
+        return encodedPath.replace("__SLASH__", "/").replace("__DOT__", ".");
     }
 
     /**
@@ -340,38 +427,76 @@ public class TelegramSessionService {
             return files;
         }
         
-        // 递归搜索所有子目录，特别是database目录
-        try (Stream<Path> paths = Files.walk(sessionDir)) {
-            List<Path> fileList = paths
-                .filter(Files::isRegularFile)
-                .filter(path -> {
-                    String fileName = path.getFileName().toString();
-                    // 保存TDLib相关的所有重要文件，包括SQLite数据库文件
-                    return fileName.endsWith(".binlog") || 
-                           fileName.endsWith(".db") ||
-                           fileName.startsWith("db.sqlite") ||  // SQLite数据库文件
-                           fileName.equals("td.binlog") ||
-                           fileName.equals("config.json") ||
-                           fileName.endsWith(".sqlite") ||      // 其他SQLite文件
-                           fileName.endsWith(".sqlite-shm") ||  // SQLite共享内存文件
-                           fileName.endsWith(".sqlite-wal");    // SQLite预写日志文件
-                })
-                .collect(Collectors.toList());
-            
-            for (Path filePath : fileList) {
-                // 使用相对路径作为文件名，保持目录结构
-                String relativePath = sessionDir.relativize(filePath).toString();
-                // 将路径中的特殊字符进行编码，避免MongoDB key限制
-                String encodedPath = relativePath.replace("/", "__SLASH__").replace(".", "__DOT__");
-                byte[] fileData = Files.readAllBytes(filePath);
-                String encodedData = Base64.getEncoder().encodeToString(fileData);
-                files.put(encodedPath, encodedData);
-                logger.debug("读取session文件: {} -> {} (大小: {} bytes)", relativePath, encodedPath, fileData.length);
-            }
-        }
+        List<Path> sessionFileList = findSessionFiles(sessionDir);
+        processSessionFiles(sessionFileList, sessionDir, files);
         
         logger.info("读取session文件完成，共 {} 个文件", files.size());
         return files;
+    }
+
+    /**
+     * 查找session相关文件
+     * 
+     * @param sessionDir session目录
+     * @return 找到的文件列表
+     * @throws IOException 如果遍历目录失败
+     */
+    private List<Path> findSessionFiles(Path sessionDir) throws IOException {
+        try (Stream<Path> paths = Files.walk(sessionDir)) {
+            return paths
+                .filter(Files::isRegularFile)
+                .filter(this::isSessionFile)
+                .collect(Collectors.toList());
+        }
+    }
+
+    /**
+     * 判断是否为session相关文件
+     * 
+     * @param path 文件路径
+     * @return 是否为session文件
+     */
+    private boolean isSessionFile(Path path) {
+        String fileName = path.getFileName().toString();
+        return fileName.endsWith(".binlog") || 
+               fileName.endsWith(".db") ||
+               fileName.startsWith("db.sqlite") ||
+               fileName.equals("td.binlog") ||
+               fileName.equals("config.json") ||
+               fileName.endsWith(".sqlite") ||
+               fileName.endsWith(".sqlite-shm") ||
+               fileName.endsWith(".sqlite-wal");
+    }
+
+    /**
+     * 处理session文件
+     * 
+     * @param fileList 文件列表
+     * @param sessionDir session目录
+     * @param files 结果映射
+     * @throws IOException 如果读取文件失败
+     */
+    private void processSessionFiles(List<Path> fileList, Path sessionDir, Map<String, String> files) throws IOException {
+        for (Path filePath : fileList) {
+            String relativePath = sessionDir.relativize(filePath).toString();
+            String encodedPath = encodePath(relativePath);
+            
+            byte[] fileData = Files.readAllBytes(filePath);
+            String encodedData = Base64.getEncoder().encodeToString(fileData);
+            
+            files.put(encodedPath, encodedData);
+            logger.debug("读取session文件: {} -> {} (大小: {} bytes)", relativePath, encodedPath, fileData.length);
+        }
+    }
+
+    /**
+     * 编码路径
+     * 
+     * @param relativePath 相对路径
+     * @return 编码后的路径
+     */
+    private String encodePath(String relativePath) {
+        return relativePath.replace("/", "__SLASH__").replace(".", "__DOT__");
     }
 
     /**
@@ -388,29 +513,60 @@ public class TelegramSessionService {
             return files;
         }
         
-        // 只读取小文件，避免内存溢出
+        List<Path> downloadFileList = findDownloadFiles(downloadsDir);
+        processDownloadFiles(downloadFileList, files);
+        
+        logger.info("读取下载文件完成，共 {} 个文件", files.size());
+        return files;
+    }
+
+    /**
+     * 查找下载文件
+     * 
+     * @param downloadsDir 下载目录
+     * @return 找到的文件列表
+     * @throws IOException 如果遍历目录失败
+     */
+    private List<Path> findDownloadFiles(Path downloadsDir) throws IOException {
         try (Stream<Path> paths = Files.walk(downloadsDir)) {
-            List<Path> fileList = paths
+            return paths
                 .filter(Files::isRegularFile)
-                .filter(path -> {
-                    try {
-                        return Files.size(path) < 1024 * 1024; // 小于1MB的文件
-                    } catch (IOException e) {
-                        return false;
-                    }
-                })
+                .filter(this::isSmallDownloadFile)
                 .limit(100) // 最多100个文件
                 .collect(Collectors.toList());
-            
-            for (Path filePath : fileList) {
-                String fileName = filePath.getFileName().toString();
-                byte[] fileData = Files.readAllBytes(filePath);
-                String encodedData = Base64.getEncoder().encodeToString(fileData);
-                files.put(fileName, encodedData);
-            }
         }
-        
-        return files;
+    }
+
+    /**
+     * 判断是否为小的下载文件
+     * 
+     * @param path 文件路径
+     * @return 是否为小文件
+     */
+    private boolean isSmallDownloadFile(Path path) {
+        try {
+            return Files.size(path) < 1024 * 1024; // 小于1MB的文件
+        } catch (IOException e) {
+            logger.warn("无法获取文件大小: {}", path, e);
+            return false;
+        }
+    }
+
+    /**
+     * 处理下载文件
+     * 
+     * @param fileList 文件列表
+     * @param files 结果映射
+     * @throws IOException 如果读取文件失败
+     */
+    private void processDownloadFiles(List<Path> fileList, Map<String, String> files) throws IOException {
+        for (Path filePath : fileList) {
+            String fileName = filePath.getFileName().toString();
+            byte[] fileData = Files.readAllBytes(filePath);
+            String encodedData = Base64.getEncoder().encodeToString(fileData);
+            files.put(fileName, encodedData);
+            logger.debug("读取下载文件: {} (大小: {} bytes)", fileName, fileData.length);
+        }
     }
 
     /**
@@ -448,14 +604,7 @@ public class TelegramSessionService {
         return sessionRepository.findAvailableSessions();
     }
 
-    /**
-     * 获取当前实例的活跃session
-     * 
-     * @return session列表
-     */
-    public List<TelegramSession> getCurrentInstanceSessions() {
-        return sessionRepository.findByInstanceIdAndIsActiveTrue(instanceId);
-    }
+
 
     /**
      * 清理过期的session

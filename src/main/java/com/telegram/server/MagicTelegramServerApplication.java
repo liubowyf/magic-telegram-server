@@ -14,7 +14,7 @@ import org.springframework.context.annotation.ComponentScan;
  * @since 2025-08-05
  */
 @SpringBootApplication
-@ComponentScan(basePackages = {"com.telegram.server", "com.magictelegram"})
+@ComponentScan(basePackages = {"com.telegram.server"})
 public class MagicTelegramServerApplication {
 
     /**

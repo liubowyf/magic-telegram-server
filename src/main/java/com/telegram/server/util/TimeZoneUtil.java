@@ -159,45 +159,9 @@ public class TimeZoneUtil {
         return LocalDateTime.now(SYSTEM_ZONE);
     }
     
-    /**
-     * 验证时区ID是否有效
-     * 
-     * @param zoneId 时区ID字符串
-     * @return 如果时区ID有效返回true，否则返回false
-     */
-    public static boolean isValidZoneId(String zoneId) {
-        if (zoneId == null || zoneId.trim().isEmpty()) {
-            return false;
-        }
-        
-        try {
-            ZoneId.of(zoneId);
-            return true;
-        } catch (Exception e) {
-            return false;
-        }
-    }
+
     
-    /**
-     * 获取时区对象，使用缓存提高性能
-     * 
-     * @param zoneId 时区ID字符串
-     * @return ZoneId对象
-     * @throws IllegalArgumentException 如果时区ID无效
-     */
-    public static ZoneId getZoneId(String zoneId) {
-        if (zoneId == null || zoneId.trim().isEmpty()) {
-            throw new IllegalArgumentException("Zone ID cannot be null or empty");
-        }
-        
-        return ZONE_CACHE.computeIfAbsent(zoneId, id -> {
-            try {
-                return ZoneId.of(id);
-            } catch (Exception e) {
-                throw new IllegalArgumentException("Invalid zone ID: " + id, e);
-            }
-        });
-    }
+
     
     /**
      * 将LocalDateTime转换为Unix时间戳
@@ -256,56 +220,9 @@ public class TimeZoneUtil {
         }
     }
     
-    /**
-     * 计算两个UTC时间之间的差值（秒）
-     * 
-     * @param startTime 开始时间（UTC）
-     * @param endTime 结束时间（UTC）
-     * @return 时间差值（秒），正数表示endTime在startTime之后
-     */
-    public static long calculateDurationSeconds(LocalDateTime startTime, LocalDateTime endTime) {
-        if (startTime == null || endTime == null) {
-            throw new IllegalArgumentException("Start time and end time cannot be null");
-        }
-        
-        try {
-            return Duration.between(startTime, endTime).getSeconds();
-        } catch (Exception e) {
-            throw new IllegalArgumentException("Failed to calculate duration", e);
-        }
-    }
+
     
-    /**
-     * 检查时间是否在指定范围内
-     * 
-     * @param checkTime 要检查的时间（UTC）
-     * @param startTime 范围开始时间（UTC）
-     * @param endTime 范围结束时间（UTC）
-     * @return 如果时间在范围内返回true，否则返回false
-     */
-    public static boolean isTimeInRange(LocalDateTime checkTime, LocalDateTime startTime, LocalDateTime endTime) {
-        if (checkTime == null || startTime == null || endTime == null) {
-            throw new IllegalArgumentException("All time parameters cannot be null");
-        }
-        
-        return !checkTime.isBefore(startTime) && !checkTime.isAfter(endTime);
-    }
+
     
-    /**
-     * 获取时区信息摘要
-     * 用于调试和日志记录
-     * 
-     * @return 时区信息字符串
-     */
-    public static String getTimezoneInfo() {
-        StringBuilder info = new StringBuilder();
-        info.append("TimeZone Info:\n");
-        info.append("  UTC Zone: ").append(UTC_ZONE).append("\n");
-        info.append("  System Zone: ").append(SYSTEM_ZONE).append("\n");
-        info.append("  China Zone: ").append(CHINA_ZONE).append("\n");
-        info.append("  Current UTC: ").append(getCurrentUtc()).append("\n");
-        info.append("  Current System: ").append(getCurrentSystem()).append("\n");
-        info.append("  Zone Cache Size: ").append(ZONE_CACHE.size());
-        return info.toString();
-    }
+
 }

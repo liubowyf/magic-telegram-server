@@ -3,7 +3,7 @@ package com.telegram.server.controller;
 import com.telegram.server.config.MessageStorageConfig;
 import com.telegram.server.entity.TelegramMessage;
 import com.telegram.server.monitor.MessageStorageMonitor;
-import com.telegram.server.service.TelegramMessageService;
+import com.telegram.server.service.ITelegramMessageService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -27,7 +27,7 @@ public class MessageStorageTestController {
     private MessageStorageConfig config;
 
     @Autowired
-    private TelegramMessageService telegramMessageService;
+    private ITelegramMessageService telegramMessageService;
 
     @Autowired
     private MessageStorageMonitor monitor;

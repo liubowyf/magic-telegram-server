@@ -1,4 +1,4 @@
-package com.magictelegram.monitor;
+package com.telegram.server.storage.monitor;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

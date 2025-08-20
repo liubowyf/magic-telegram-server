@@ -423,7 +423,25 @@ public class TelegramSession {
     public void deactivate() {
         this.isActive = false;
         this.instanceId = null;
-        this.updatedTime = LocalDateTime.now();
+        this.lastActiveTime = LocalDateTime.now();
+    }
+
+    /**
+     * 获取session数据（别名方法）
+     * 
+     * @return 数据库文件数据
+     */
+    public Map<String, String> getSessionData() {
+        return getDatabaseFiles();
+    }
+
+    /**
+     * 获取TDLib数据（别名方法）
+     * 
+     * @return 数据库文件数据
+     */
+    public Map<String, String> getTdlibData() {
+        return getDatabaseFiles();
     }
 
     @Override

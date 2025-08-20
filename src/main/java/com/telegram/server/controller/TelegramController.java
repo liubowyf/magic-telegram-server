@@ -1,6 +1,6 @@
 package com.telegram.server.controller;
 
-import com.telegram.server.service.TelegramService;
+import com.telegram.server.service.ITelegramService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -37,7 +37,7 @@ public class TelegramController {
      * 负责处理单账号的所有Telegram相关操作
      */
     @Autowired
-    private TelegramService telegramService;
+    private ITelegramService telegramService;
     
     /**
      * 创建并初始化Telegram账号

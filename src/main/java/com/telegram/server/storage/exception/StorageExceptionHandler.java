@@ -1,6 +1,6 @@
-package com.magictelegram.exception;
+package com.telegram.server.storage.exception;
 
-import com.magictelegram.monitor.StorageMonitor;
+import com.telegram.server.storage.monitor.StorageMonitor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
