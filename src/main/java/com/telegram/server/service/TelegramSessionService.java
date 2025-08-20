@@ -2,7 +2,7 @@ package com.telegram.server.service;
 
 import com.telegram.server.entity.TelegramSession;
 import com.telegram.server.repository.TelegramSessionRepository;
-import com.telegram.server.service.SessionStorageManager;
+import com.telegram.server.service.GridFSStorageManager;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -52,7 +52,7 @@ public class TelegramSessionService {
     private TelegramSessionRepository sessionRepository;
 
     @Autowired
-    private SessionStorageManager sessionStorageManager;
+    private GridFSStorageManager gridfsStorageManager;
 
     /**
      * 应用名称，用于区分不同的服务实例
@@ -246,8 +246,8 @@ public class TelegramSessionService {
             // 读取下载文件信息
             Map<String, String> downloadedFiles = readDownloadedFiles(sessionPath + "/downloads");
             
-            // 使用SessionStorageManager存储数据
-            session = sessionStorageManager.storeSession(session, databaseFiles, downloadedFiles);
+            // 使用GridFSStorageManager存储数据
+            session = gridfsStorageManager.storeSession(session, databaseFiles, downloadedFiles);
             
             session.setUpdatedTime(LocalDateTime.now());
             sessionRepository.save(session);
@@ -280,8 +280,8 @@ public class TelegramSessionService {
             Path sessionDir = Paths.get(sessionPath);
             Files.createDirectories(sessionDir);
             
-            // 使用SessionStorageManager加载完整的session数据
-            session = sessionStorageManager.loadSession(session.getId());
+            // 使用GridFSStorageManager加载完整的session数据
+            session = gridfsStorageManager.loadSession(session.getId());
             
             // 恢复数据库文件
             if (session.getDatabaseFiles() != null) {
@@ -424,8 +424,8 @@ public class TelegramSessionService {
             Optional<TelegramSession> sessionOpt = sessionRepository.findByPhoneNumber(phoneNumber);
             if (sessionOpt.isPresent()) {
                 TelegramSession session = sessionOpt.get();
-                // 使用SessionStorageManager删除分片数据
-                boolean shardDeleted = sessionStorageManager.deleteSession(session.getId());
+                // 使用GridFSStorageManager删除分片数据
+                boolean shardDeleted = gridfsStorageManager.deleteSession(session.getId());
                 // 删除主session记录
                 sessionRepository.delete(session);
                 logger.info("删除session: {}, 分片数据删除: {}", phoneNumber, shardDeleted);
