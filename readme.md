@@ -11,12 +11,17 @@
 - 🌐 支持SOCKS5代理访问
 - 📝 消息实时输出到控制台
 - 🔐 自动会话管理和持久化
+- 💾 **GridFS智能存储** - 基于MongoDB GridFS的高效Session存储方案
+- 🗜️ **数据压缩优化** - 自动GZIP压缩，节省存储空间
+- 🔒 **数据完整性校验** - SHA256哈希校验确保数据安全
+- ⚡ **智能存储策略** - 根据数据大小自动选择最优存储方式
 - 🎯 完整的功能闭环：账户创建 → Session流程 → 消息监听
 
 ## 系统要求
 
 - Java 17+
 - Maven 3.6+
+- MongoDB 4.0+ (用于GridFS存储)
 - macOS/Linux/Windows
 - 网络代理（用于访问Telegram服务器）
 
@@ -31,6 +36,12 @@
 - 类型: SOCKS5
 - 地址: 127.0.0.1
 - 端口: 7890
+
+### Session存储配置
+- 存储策略: GridFS (MongoDB)
+- 压缩算法: GZIP
+- 分片阈值: 8MB
+- 完整性校验: SHA256
 
 ## 快速开始
 
@@ -117,10 +128,19 @@ magic-telegram-server/
 │   │   │   ├── controller/
 │   │   │   │   └── TelegramController.java          # 单账户REST控制器
 │   │   │   └── service/
-│   │   │       └── TelegramService.java             # 单账户核心服务
+│   │   │       ├── TelegramService.java             # 单账户核心服务
+│   │   │       ├── TelegramSessionService.java      # Session管理服务
+│   │   │       ├── GridFSStorageManager.java        # GridFS存储管理器
+│   │   │       ├── GridFSService.java               # GridFS核心服务
+│   │   │       ├── GridFSCompressionService.java    # GridFS压缩服务
+│   │   │       └── GridFSIntegrityService.java      # GridFS完整性服务
 │   │   └── resources/
 │   │       └── application.yml                      # 配置文件
 │   └── test/
+├── docs/
+│   └── gridfs-migration/                           # GridFS迁移文档
+│       ├── ALIGNMENT_gridfs-migration.md           # 需求对齐文档
+│       └── DESIGN_gridfs-migration.md              # 架构设计文档
 ├── telegram-session/                                # 会话数据目录
 ├── logs/                                           # 日志目录
 ├── pom.xml                                         # Maven配置
@@ -142,6 +162,9 @@ magic-telegram-server/
 - **验证码验证**: 提交短信验证码进行验证
 - **密码验证**: 如开启两步验证，需提交密码
 - **Session持久化**: 认证成功后自动保存会话信息
+- **智能存储**: 根据数据大小自动选择GridFS或传统存储方式
+- **数据压缩**: 大于8MB的数据自动进行GZIP压缩
+- **完整性校验**: 使用SHA256哈希确保数据完整性
 
 ### 3. 消息监听
 - 认证完成后可启动实时消息监听
@@ -152,10 +175,13 @@ magic-telegram-server/
 ## 注意事项
 
 1. **代理设置**: 确保SOCKS5代理服务正常运行在127.0.0.1:7890
-2. **会话持久化**: 认证成功后会在`telegram-session`目录保存会话信息
-3. **群组权限**: 确保Telegram账号已加入需要监听的群组
-4. **网络连接**: 需要稳定的网络连接和代理服务
-5. **单账户模式**: 系统只支持单个账户，创建新账户会清理旧账户数据
+2. **MongoDB服务**: 确保MongoDB 4.0+服务正常运行，用于GridFS存储
+3. **会话持久化**: 认证成功后会在MongoDB中保存会话信息，支持GridFS大文件存储
+4. **存储策略**: 系统自动根据数据大小选择存储方式，大于8MB使用GridFS
+5. **数据压缩**: 大文件自动进行GZIP压缩，节省存储空间
+6. **群组权限**: 确保Telegram账号已加入需要监听的群组
+7. **网络连接**: 需要稳定的网络连接和代理服务
+8. **单账户模式**: 系统只支持单个账户，创建新账户会清理旧账户数据
 
 ## 故障排除
 
@@ -173,7 +199,14 @@ magic-telegram-server/
 ### Session问题
 - 如认证失败，可使用 `/telegram/session/clear` 清理Session数据
 - 清理后需重新进行完整认证流程
-- Session数据存储在 `telegram-session` 目录
+- Session数据存储在MongoDB中，支持GridFS大文件存储
+- 检查MongoDB连接状态和GridFS配置
+
+### 存储问题
+- 确认MongoDB服务正常运行
+- 检查GridFS存储空间是否充足
+- 验证数据压缩和完整性校验功能
+- 查看存储策略配置是否正确
 
 ### 依赖问题
 - 清理Maven缓存: `mvn clean`
@@ -221,19 +254,29 @@ curl -X POST http://localhost:8080/api/telegram/listening/start
 curl http://localhost:8080/api/telegram/auth/status
 ```
 
+## 更新日志
+
+### v1.1.0 (2025-01-19) - GridFS存储优化
+- ✅ **GridFS智能存储** - 实现基于MongoDB GridFS的高效Session存储方案
+- ✅ **数据压缩优化** - 集成GZIP压缩算法，自动压缩大于8MB的数据
+- ✅ **完整性校验** - 实现SHA256哈希校验，确保数据完整性和安全性
+- ✅ **智能存储策略** - 根据数据大小自动选择最优存储方式
+- ✅ **存储架构重构** - 替换自定义分片机制，提升存储性能和可维护性
+
 ## TODO 列表
 
 以下是项目的后续开发计划：
 
 - [ ] **多账户管理** - 支持同时管理多个Telegram账户，实现账户间的独立认证和消息监听
-- [ ] **多数据源存储** - 集成多种数据存储方案（MySQL、MongoDB、Redis、ES等），支持消息持久化和历史查询
+- [ ] **消息持久化** - 基于GridFS实现消息历史存储和查询功能
 - [ ] **实时消息分类** - 基于机器学习算法实现消息智能分类，支持自定义分类规则和标签管理
+- [ ] **存储监控面板** - 实现GridFS存储状态监控和性能分析面板
 
 ## 作者
 
 - **作者**: liubo
 - **日期**: 2025-08-05
-- **版本**: 1.0 (单账户模式)
+- **版本**: 1.1.0 (GridFS存储优化版)
 
 ## 许可证
 
