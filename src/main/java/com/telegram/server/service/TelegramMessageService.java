@@ -1,0 +1,714 @@
+package com.telegram.server.service;
+
+import com.telegram.server.entity.TelegramMessage;
+import com.telegram.server.repository.TelegramMessageRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
+import com.telegram.server.lifecycle.ApplicationLifecycleManager;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.scheduling.annotation.Async;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import com.telegram.server.monitor.MessageStorageMonitor;
+import com.telegram.server.config.MessageStorageConfig;
+
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.List;
+import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicLong;
+
+/**
+ * Telegram消息服务类
+ * 
+ * 提供Telegram消息的业务逻辑处理，包括消息存储、查询、统计等功能。
+ * 针对大量群组消息的高效处理进行了优化，支持异步处理和批量操作。
+ * 
+ * 主要功能：
+ * - 异步消息存储：确保消息入库的及时性
+ * - 消息去重：避免重复存储相同消息
+ * - 分组查询：按账号和群组分组查询消息
+ * - 统计分析：提供消息统计和分析功能
+ * - 批量处理：支持批量消息处理
+ * - 性能监控：记录处理性能指标
+ * 
+ * 性能优化：
+ * - 异步处理提高响应速度
+ * - 批量插入减少数据库压力
+ * - 智能去重避免重复处理
+ * - 分页查询控制内存使用
+ * 
+ * @author liubo
+ * @date 2025-01-19
+ */
+@Service
+@Transactional
+public class TelegramMessageService {
+
+    private static final Logger logger = LoggerFactory.getLogger(TelegramMessageService.class);
+
+    @Autowired
+    private TelegramMessageRepository messageRepository;
+
+    @Autowired
+    private MessageStorageMonitor monitor;
+
+    @Autowired
+    private MessageStorageConfig config;
+
+    @Autowired
+    private ApplicationLifecycleManager lifecycleManager;
+
+    /**
+     * 服务实例ID，用于集群环境下的消息追踪
+     */
+    @Value("${spring.application.name:telegram-server}")
+    private String instanceId;
+
+    /**
+     * 批量处理大小
+     */
+    @Value("${telegram.message.batch-size:100}")
+    private int batchSize;
+
+    /**
+     * 异步处理线程池名称
+     */
+    private static final String ASYNC_EXECUTOR = "messageProcessorExecutor";
+
+    // ==================== 性能监控指标 ====================
+    
+    /**
+     * 消息处理计数器
+     */
+    private final AtomicLong processedMessageCount = new AtomicLong(0);
+    
+    /**
+     * 消息存储计数器
+     */
+    private final AtomicLong savedMessageCount = new AtomicLong(0);
+    
+    /**
+     * 重复消息计数器
+     */
+    private final AtomicLong duplicateMessageCount = new AtomicLong(0);
+
+    // ==================== 核心消息处理方法 ====================
+    
+    /**
+     * 异步更新消息的图片数据
+     * 
+     * 用于在图片下载和处理完成后更新消息实体的图片相关字段。
+     * 支持Base64编码数据存储和文件路径存储两种模式。
+     * 
+     * @param accountPhone 账号手机号
+     * @param chatId 聊天ID
+     * @param messageId 消息ID
+     * @param imageData Base64编码的图片数据（可为null）
+     * @param imageFilename 图片文件名
+     * @param imageMimeType 图片MIME类型
+     * @param imageStatus 图片处理状态
+     * @return 更新结果的CompletableFuture
+     * @author liubo
+     * @since 2025.01.19
+     */
+    @Async("messageProcessingExecutor")
+    public CompletableFuture<Boolean> updateImageDataAsync(String accountPhone, Long chatId, Long messageId,
+                                                           String imageData, String imageFilename, 
+                                                           String imageMimeType, String imageStatus) {
+        // 检查Spring容器状态
+        if (!isApplicationContextActive()) {
+            logger.warn("Spring容器正在关闭，跳过异步图片数据更新");
+            return CompletableFuture.completedFuture(false);
+        }
+
+        try {
+            // 查找消息
+            Optional<TelegramMessage> messageOpt = findMessage(accountPhone, chatId, messageId);
+            if (!messageOpt.isPresent()) {
+                logger.warn("未找到消息，无法更新图片数据: accountPhone={}, chatId={}, messageId={}", 
+                           accountPhone, chatId, messageId);
+                return CompletableFuture.completedFuture(false);
+            }
+            
+            TelegramMessage message = messageOpt.get();
+            
+            // 更新图片相关字段
+            message.setImageData(imageData);
+            message.setImageFilename(imageFilename);
+            message.setImageMimeType(imageMimeType);
+            message.setImageStatus(imageStatus);
+            message.setImageProcessedTime(LocalDateTime.now());
+            
+            // 保存更新
+            messageRepository.save(message);
+            
+            logger.info("图片数据更新成功: accountPhone={}, chatId={}, messageId={}, filename={}, mimeType={}, status={}",
+                       accountPhone, chatId, messageId, imageFilename, imageMimeType, imageStatus);
+            
+            return CompletableFuture.completedFuture(true);
+            
+        } catch (Exception e) {
+            logger.error("更新图片数据失败: accountPhone={}, chatId={}, messageId={}, error={}", 
+                        accountPhone, chatId, messageId, e.getMessage(), e);
+            return CompletableFuture.completedFuture(false);
+        }
+    }
+    
+    /**
+     * 检查Spring容器是否处于活跃状态
+     * 防止在容器销毁阶段执行异步操作导致BeanCreationNotAllowedException
+     * 
+     * @return 容器是否活跃
+     */
+    private boolean isApplicationContextActive() {
+        return lifecycleManager.isApplicationContextActive();
+    }
+
+    /**
+     * 异步保存单个消息
+     * 这是核心方法，用于处理从Telegram接收到的消息
+     * 
+     * @param message 消息对象
+     * @return 异步处理结果
+     */
+    @Async("messageProcessingExecutor")
+    public CompletableFuture<Boolean> saveMessageAsync(TelegramMessage message) {
+        // 检查Spring容器状态
+        if (!isApplicationContextActive()) {
+            logger.warn("Spring容器正在关闭，跳过异步消息保存");
+            return CompletableFuture.completedFuture(false);
+        }
+
+        if (message == null) {
+            logger.warn("尝试保存空消息，跳过处理");
+            return CompletableFuture.completedFuture(false);
+        }
+
+        // 检查是否启用消息存储
+        if (!config.isEnabled()) {
+            logger.debug("消息存储功能已禁用，跳过保存");
+            return CompletableFuture.completedFuture(false);
+        }
+
+        long startTime = System.currentTimeMillis();
+        monitor.recordReceivedMessage();
+
+        try {
+            // 检查消息是否已存在（去重）
+            if (config.isDeduplicationEnabled() && isMessageExists(message.getAccountPhone(), message.getChatId(), message.getMessageId())) {
+                if (config.isVerboseLogging()) {
+                    logger.debug("消息已存在，跳过保存: accountPhone={}, chatId={}, messageId={}", 
+                        message.getAccountPhone(), message.getChatId(), message.getMessageId());
+                }
+                duplicateMessageCount.incrementAndGet();
+                monitor.recordDuplicateMessage();
+                return CompletableFuture.completedFuture(false);
+            }
+            
+            // 设置实例ID和创建时间
+            message.setInstanceId(instanceId);
+            message.updateCreatedTime();
+            
+            // 保存消息
+            TelegramMessage savedMessage = messageRepository.save(message);
+            
+            // 更新统计计数器
+            processedMessageCount.incrementAndGet();
+            savedMessageCount.incrementAndGet();
+            monitor.recordSavedMessage();
+            
+            if (config.isVerboseLogging()) {
+                long endTime = System.currentTimeMillis();
+                logger.info("消息保存成功: accountPhone={}, chatId={}, messageId={}, chatTitle={}, messageType={}, 耗时={}ms", 
+                    savedMessage.getAccountPhone(), savedMessage.getChatId(), savedMessage.getMessageId(),
+                    savedMessage.getChatTitle(), savedMessage.getMessageType(), (endTime - startTime));
+            }
+            
+            return CompletableFuture.completedFuture(true);
+            
+        } catch (Exception e) {
+            logger.error("消息保存失败: accountPhone={}, chatId={}, messageId={}, error={}", 
+                message.getAccountPhone(), message.getChatId(), message.getMessageId(), e.getMessage(), e);
+            monitor.recordFailedMessage();
+            return CompletableFuture.completedFuture(false);
+        } finally {
+            // 记录处理时间
+            long processingTime = System.currentTimeMillis() - startTime;
+            monitor.recordProcessingTime(processingTime);
+        }
+    }
+
+    /**
+     * 同步保存单个消息
+     * 用于需要立即确认保存结果的场景
+     * 
+     * @param message 消息对象
+     * @return 是否保存成功
+     */
+    public boolean saveMessage(TelegramMessage message) {
+        try {
+            // 设置实例ID和创建时间
+            message.setInstanceId(instanceId);
+            message.updateCreatedTime();
+            
+            // 检查消息是否已存在（去重）
+            if (isMessageExists(message.getAccountPhone(), message.getChatId(), message.getMessageId())) {
+                duplicateMessageCount.incrementAndGet();
+                logger.debug("消息已存在，跳过保存: accountPhone={}, chatId={}, messageId={}", 
+                    message.getAccountPhone(), message.getChatId(), message.getMessageId());
+                return false;
+            }
+            
+            // 保存消息
+            messageRepository.save(message);
+            
+            // 更新统计计数器
+            processedMessageCount.incrementAndGet();
+            savedMessageCount.incrementAndGet();
+            
+            logger.info("消息保存成功: accountPhone={}, chatId={}, messageId={}, chatTitle={}", 
+                message.getAccountPhone(), message.getChatId(), message.getMessageId(), message.getChatTitle());
+            
+            return true;
+            
+        } catch (Exception e) {
+            logger.error("消息保存失败: accountPhone={}, chatId={}, messageId={}, error={}", 
+                message.getAccountPhone(), message.getChatId(), message.getMessageId(), e.getMessage(), e);
+            return false;
+        }
+    }
+
+    /**
+     * 批量异步保存消息
+     * 用于处理大量消息的场景，提高处理效率
+     * 
+     * @param messages 消息列表
+     * @return 异步处理结果
+     */
+    @Async(ASYNC_EXECUTOR)
+    public CompletableFuture<Integer> saveMessagesAsync(List<TelegramMessage> messages) {
+        // 检查Spring容器状态
+        if (!isApplicationContextActive()) {
+            logger.warn("Spring容器正在关闭，跳过批量异步消息保存");
+            return CompletableFuture.completedFuture(0);
+        }
+
+        if (messages == null || messages.isEmpty()) {
+            return CompletableFuture.completedFuture(0);
+        }
+        
+        // 检查是否启用消息存储
+        if (!config.isEnabled()) {
+            logger.debug("消息存储功能已禁用，跳过批量保存");
+            return CompletableFuture.completedFuture(0);
+        }
+        
+        long startTime = System.currentTimeMillis();
+        
+        // 记录接收到的消息数量
+        for (int i = 0; i < messages.size(); i++) {
+            monitor.recordReceivedMessage();
+        }
+        
+        try {
+            int savedCount = 0;
+            final AtomicLong duplicateCountLocal = new AtomicLong(0);
+            
+            // 设置实例ID和创建时间
+            for (TelegramMessage message : messages) {
+                message.setInstanceId(instanceId);
+                message.updateCreatedTime();
+            }
+            
+            // 过滤重复消息（如果启用去重）
+            List<TelegramMessage> uniqueMessages;
+            if (config.isDeduplicationEnabled()) {
+                uniqueMessages = messages.stream()
+                    .filter(message -> {
+                        if (isMessageExists(message.getAccountPhone(), message.getChatId(), message.getMessageId())) {
+                            duplicateCountLocal.incrementAndGet();
+                            return false;
+                        }
+                        return true;
+                    })
+                    .toList();
+            } else {
+                uniqueMessages = messages;
+            }
+            
+            // 批量保存
+            if (!uniqueMessages.isEmpty()) {
+                List<TelegramMessage> savedMessages = messageRepository.saveAll(uniqueMessages);
+                savedCount = savedMessages.size();
+                
+                // 记录保存成功的消息数量
+                for (int i = 0; i < savedCount; i++) {
+                    monitor.recordSavedMessage();
+                }
+            }
+            
+            // 记录重复消息数量
+            long duplicateCountValue = duplicateCountLocal.get();
+            for (int i = 0; i < duplicateCountValue; i++) {
+                monitor.recordDuplicateMessage();
+            }
+            
+            // 更新统计计数器
+            processedMessageCount.addAndGet(messages.size());
+            savedMessageCount.addAndGet(savedCount);
+            duplicateMessageCount.addAndGet(duplicateCountValue);
+            
+            if (config.isVerboseLogging()) {
+                long endTime = System.currentTimeMillis();
+                logger.info("批量消息保存完成: 总数={}, 保存={}, 重复={}, 耗时={}ms", 
+                    messages.size(), savedCount, duplicateCountValue, (endTime - startTime));
+            }
+            
+            return CompletableFuture.completedFuture(savedCount);
+            
+        } catch (Exception e) {
+            logger.error("批量消息保存失败: 消息数量={}, error={}", messages.size(), e.getMessage(), e);
+            
+            // 记录失败的消息数量
+            for (int i = 0; i < messages.size(); i++) {
+                monitor.recordFailedMessage();
+            }
+            
+            return CompletableFuture.completedFuture(0);
+        } finally {
+            // 记录处理时间
+            long processingTime = System.currentTimeMillis() - startTime;
+            monitor.recordProcessingTime(processingTime);
+        }
+    }
+
+    // ==================== 消息查询方法 ====================
+    
+    /**
+     * 检查消息是否已存在
+     * 
+     * @param accountPhone 账号手机号
+     * @param chatId 聊天ID
+     * @param messageId 消息ID
+     * @return 是否存在
+     */
+    public boolean isMessageExists(String accountPhone, Long chatId, Long messageId) {
+        return messageRepository.existsByAccountPhoneAndChatIdAndMessageId(accountPhone, chatId, messageId);
+    }
+
+    /**
+     * 根据ID查找消息
+     * 
+     * @param messageId 消息复合ID
+     * @return 消息对象（可能为空）
+     */
+    public Optional<TelegramMessage> findById(String messageId) {
+        return messageRepository.findById(messageId);
+    }
+
+    /**
+     * 根据账号、聊天ID和消息ID查找消息
+     * 
+     * @param accountPhone 账号手机号
+     * @param chatId 聊天ID
+     * @param messageId 消息ID
+     * @return 消息对象（可能为空）
+     */
+    public Optional<TelegramMessage> findMessage(String accountPhone, Long chatId, Long messageId) {
+        return messageRepository.findByAccountPhoneAndChatIdAndMessageId(accountPhone, chatId, messageId);
+    }
+
+    /**
+     * 查询指定账号的消息
+     * 
+     * @param accountPhone 账号手机号
+     * @param page 页码（从0开始）
+     * @param size 每页大小
+     * @return 消息分页结果
+     */
+    public Page<TelegramMessage> findMessagesByAccount(String accountPhone, int page, int size) {
+        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "messageDate"));
+        return messageRepository.findByAccountPhone(accountPhone, pageable);
+    }
+
+    /**
+     * 查询指定账号在指定群组的消息
+     * 
+     * @param accountPhone 账号手机号
+     * @param chatId 聊天ID
+     * @param page 页码（从0开始）
+     * @param size 每页大小
+     * @return 消息分页结果
+     */
+    public Page<TelegramMessage> findMessagesByAccountAndChat(String accountPhone, Long chatId, int page, int size) {
+        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "messageDate"));
+        return messageRepository.findByAccountPhoneAndChatId(accountPhone, chatId, pageable);
+    }
+
+    /**
+     * 查询指定账号的最新消息
+     * 
+     * @param accountPhone 账号手机号
+     * @param limit 限制数量
+     * @return 最新消息列表
+     */
+    public Page<TelegramMessage> findLatestMessages(String accountPhone, int limit) {
+        Pageable pageable = PageRequest.of(0, limit, Sort.by(Sort.Direction.DESC, "messageDate"));
+        return messageRepository.findLatestMessagesByAccount(accountPhone, pageable);
+    }
+
+    /**
+     * 查询指定账号在指定群组的最新消息
+     * 
+     * @param accountPhone 账号手机号
+     * @param chatId 聊天ID
+     * @param limit 限制数量
+     * @return 最新消息列表
+     */
+    public Page<TelegramMessage> findLatestMessagesInChat(String accountPhone, Long chatId, int limit) {
+        Pageable pageable = PageRequest.of(0, limit, Sort.by(Sort.Direction.DESC, "messageDate"));
+        return messageRepository.findLatestMessagesByAccountAndChat(accountPhone, chatId, pageable);
+    }
+
+    /**
+     * 按时间范围查询消息
+     * 
+     * @param accountPhone 账号手机号
+     * @param startTime 开始时间
+     * @param endTime 结束时间
+     * @param page 页码
+     * @param size 每页大小
+     * @return 消息分页结果
+     */
+    public Page<TelegramMessage> findMessagesByTimeRange(String accountPhone, LocalDateTime startTime, 
+            LocalDateTime endTime, int page, int size) {
+        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "messageDate"));
+        return messageRepository.findByAccountPhoneAndMessageDateBetween(accountPhone, startTime, endTime, pageable);
+    }
+
+    /**
+     * 按消息类型查询消息
+     * 
+     * @param accountPhone 账号手机号
+     * @param messageType 消息类型
+     * @param page 页码
+     * @param size 每页大小
+     * @return 消息分页结果
+     */
+    public Page<TelegramMessage> findMessagesByType(String accountPhone, String messageType, int page, int size) {
+        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "messageDate"));
+        return messageRepository.findByAccountPhoneAndMessageType(accountPhone, messageType, pageable);
+    }
+
+    /**
+     * 搜索包含指定文本的消息
+     * 
+     * @param accountPhone 账号手机号
+     * @param searchText 搜索文本
+     * @param page 页码
+     * @param size 每页大小
+     * @return 消息分页结果
+     */
+    public Page<TelegramMessage> searchMessages(String accountPhone, String searchText, int page, int size) {
+        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "messageDate"));
+        return messageRepository.searchMessagesByText(accountPhone, searchText, pageable);
+    }
+
+    // ==================== 统计查询方法 ====================
+    
+    /**
+     * 统计指定账号的消息总数
+     * 
+     * @param accountPhone 账号手机号
+     * @return 消息总数
+     */
+    public long countMessagesByAccount(String accountPhone) {
+        return messageRepository.countByAccountPhone(accountPhone);
+    }
+
+    /**
+     * 统计指定账号在指定群组的消息总数
+     * 
+     * @param accountPhone 账号手机号
+     * @param chatId 聊天ID
+     * @return 消息总数
+     */
+    public long countMessagesByAccountAndChat(String accountPhone, Long chatId) {
+        return messageRepository.countByAccountPhoneAndChatId(accountPhone, chatId);
+    }
+
+    /**
+     * 统计指定账号在指定时间范围内的消息数量
+     * 
+     * @param accountPhone 账号手机号
+     * @param startTime 开始时间
+     * @param endTime 结束时间
+     * @return 消息数量
+     */
+    public long countMessagesByTimeRange(String accountPhone, LocalDateTime startTime, LocalDateTime endTime) {
+        return messageRepository.countByAccountPhoneAndMessageDateBetween(accountPhone, startTime, endTime);
+    }
+
+    /**
+     * 获取指定账号的群组消息统计
+     * 
+     * @param accountPhone 账号手机号
+     * @return 群组消息统计列表
+     */
+    public List<TelegramMessageRepository.ChatMessageStats> getChatMessageStats(String accountPhone) {
+        return messageRepository.getMessageStatsByChat(accountPhone);
+    }
+
+    /**
+     * 获取指定账号的消息类型统计
+     * 
+     * @param accountPhone 账号手机号
+     * @return 消息类型统计列表
+     */
+    public List<TelegramMessageRepository.MessageTypeStats> getMessageTypeStats(String accountPhone) {
+        return messageRepository.getMessageStatsByType(accountPhone);
+    }
+
+    /**
+     * 获取指定账号的活跃群组列表
+     * 
+     * @param accountPhone 账号手机号
+     * @return 活跃群组列表
+     */
+    public List<TelegramMessageRepository.ActiveChatInfo> getActiveChats(String accountPhone) {
+        return messageRepository.getActiveChats(accountPhone);
+    }
+
+    // ==================== 数据管理方法 ====================
+    
+    /**
+     * 删除指定账号的所有消息
+     * 谨慎使用，建议先备份
+     * 
+     * @param accountPhone 账号手机号
+     * @return 删除的消息数量
+     */
+    public long deleteMessagesByAccount(String accountPhone) {
+        try {
+            long deletedCount = messageRepository.deleteByAccountPhone(accountPhone);
+            logger.info("删除账号消息完成: accountPhone={}, 删除数量={}", accountPhone, deletedCount);
+            return deletedCount;
+        } catch (Exception e) {
+            logger.error("删除账号消息失败: accountPhone={}, error={}", accountPhone, e.getMessage(), e);
+            return 0;
+        }
+    }
+
+    /**
+     * 删除指定账号在指定群组的所有消息
+     * 
+     * @param accountPhone 账号手机号
+     * @param chatId 聊天ID
+     * @return 删除的消息数量
+     */
+    public long deleteMessagesByAccountAndChat(String accountPhone, Long chatId) {
+        try {
+            long deletedCount = messageRepository.deleteByAccountPhoneAndChatId(accountPhone, chatId);
+            logger.info("删除群组消息完成: accountPhone={}, chatId={}, 删除数量={}", accountPhone, chatId, deletedCount);
+            return deletedCount;
+        } catch (Exception e) {
+            logger.error("删除群组消息失败: accountPhone={}, chatId={}, error={}", accountPhone, chatId, e.getMessage(), e);
+            return 0;
+        }
+    }
+
+    /**
+     * 清理指定时间之前的消息
+     * 用于定期数据清理
+     * 
+     * @param beforeTime 时间点
+     * @return 删除的消息数量
+     */
+    public long cleanupOldMessages(LocalDateTime beforeTime) {
+        try {
+            long deletedCount = messageRepository.deleteByMessageDateBefore(beforeTime);
+            logger.info("清理历史消息完成: beforeTime={}, 删除数量={}", 
+                beforeTime.format(DateTimeFormatter.ISO_LOCAL_DATE_TIME), deletedCount);
+            return deletedCount;
+        } catch (Exception e) {
+            logger.error("清理历史消息失败: beforeTime={}, error={}", 
+                beforeTime.format(DateTimeFormatter.ISO_LOCAL_DATE_TIME), e.getMessage(), e);
+            return 0;
+        }
+    }
+
+    // ==================== 性能监控方法 ====================
+    
+    /**
+     * 获取处理性能统计
+     * 
+     * @return 性能统计信息
+     */
+    public ProcessingStats getProcessingStats() {
+        return new ProcessingStats(
+            processedMessageCount.get(),
+            savedMessageCount.get(),
+            duplicateMessageCount.get(),
+            instanceId
+        );
+    }
+
+    /**
+     * 重置性能统计计数器
+     */
+    public void resetStats() {
+        processedMessageCount.set(0);
+        savedMessageCount.set(0);
+        duplicateMessageCount.set(0);
+        logger.info("性能统计计数器已重置");
+    }
+
+    // ==================== 内部类 ====================
+    
+    /**
+     * 处理性能统计信息
+     */
+    public static class ProcessingStats {
+        private final long processedCount;
+        private final long savedCount;
+        private final long duplicateCount;
+        private final String instanceId;
+        private final LocalDateTime timestamp;
+
+        public ProcessingStats(long processedCount, long savedCount, long duplicateCount, String instanceId) {
+            this.processedCount = processedCount;
+            this.savedCount = savedCount;
+            this.duplicateCount = duplicateCount;
+            this.instanceId = instanceId;
+            this.timestamp = LocalDateTime.now();
+        }
+
+        // Getter方法
+        public long getProcessedCount() { return processedCount; }
+        public long getSavedCount() { return savedCount; }
+        public long getDuplicateCount() { return duplicateCount; }
+        public String getInstanceId() { return instanceId; }
+        public LocalDateTime getTimestamp() { return timestamp; }
+        
+        public double getSuccessRate() {
+            return processedCount > 0 ? (double) savedCount / processedCount * 100 : 0;
+        }
+        
+        public double getDuplicateRate() {
+            return processedCount > 0 ? (double) duplicateCount / processedCount * 100 : 0;
+        }
+
+        @Override
+        public String toString() {
+            return String.format("ProcessingStats{processed=%d, saved=%d, duplicate=%d, successRate=%.2f%%, duplicateRate=%.2f%%, instance=%s, timestamp=%s}",
+                processedCount, savedCount, duplicateCount, getSuccessRate(), getDuplicateRate(), instanceId, timestamp);
+        }
+    }
+}

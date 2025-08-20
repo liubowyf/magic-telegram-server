@@ -73,6 +73,7 @@ public class TelegramSession {
     /**
      * TDLib数据库文件数据（Base64编码）
      * 存储td.binlog等关键文件
+     * 注意：当启用分片存储时，此字段可能为空，数据存储在分片中
      */
     @Field("database_files")
     private Map<String, String> databaseFiles;
@@ -80,9 +81,79 @@ public class TelegramSession {
     /**
      * 下载文件目录的文件列表
      * 存储已下载的媒体文件信息
+     * 注意：当启用分片存储时，此字段可能为空，数据存储在分片中
      */
     @Field("downloaded_files")
     private Map<String, String> downloadedFiles;
+
+    /**
+     * 存储格式版本
+     * v1: 传统单文档存储（兼容现有数据）
+     * v2: 分片存储格式
+     */
+    @Field("storage_version")
+    private String storageVersion = "v1";
+
+    /**
+     * 是否启用分片存储
+     * true: 使用分片存储，数据存储在SessionShard集合中
+     * false: 使用传统存储，数据存储在当前文档的databaseFiles和downloadedFiles字段中
+     */
+    @Field("shard_enabled")
+    private Boolean shardEnabled = false;
+
+    /**
+     * 分片引用列表
+     * 当启用分片存储时，存储所有相关分片的ID列表
+     * 格式：["shard_id_1", "shard_id_2", ...]
+     */
+    @Field("shard_refs")
+    private java.util.List<String> shardRefs;
+
+    /**
+     * 数据完整性校验码
+     * 用于验证分片数据的完整性，防止数据丢失或损坏
+     * 使用SHA-256算法计算所有分片数据的哈希值
+     */
+    @Field("integrity_hash")
+    private String integrityHash;
+
+    /**
+     * 压缩算法类型
+     * none: 不压缩
+     * gzip: GZIP压缩
+     * 未来可扩展其他压缩算法
+     */
+    @Field("compression_type")
+    private String compressionType = "none";
+
+    /**
+     * 原始数据大小（字节）
+     * 压缩前的数据总大小，用于统计和监控
+     */
+    @Field("original_size")
+    private Long originalSize;
+
+    /**
+     * 压缩后数据大小（字节）
+     * 压缩后的数据总大小，用于计算压缩率
+     */
+    @Field("compressed_size")
+    private Long compressedSize;
+
+    /**
+     * GridFS存储的数据库文件ID
+     * 当使用GridFS存储时，此字段存储数据库文件在GridFS中的ObjectId
+     */
+    @Field("database_files_gridfs_id")
+    private String databaseFilesGridfsId;
+
+    /**
+     * GridFS存储的下载文件ID
+     * 当使用GridFS存储时，此字段存储下载文件在GridFS中的ObjectId
+     */
+    @Field("downloaded_files_gridfs_id")
+    private String downloadedFilesGridfsId;
 
     /**
      * Session是否激活
@@ -253,6 +324,78 @@ public class TelegramSession {
 
     public void setExtraConfig(Map<String, Object> extraConfig) {
         this.extraConfig = extraConfig;
+    }
+
+    public String getStorageVersion() {
+        return storageVersion;
+    }
+
+    public void setStorageVersion(String storageVersion) {
+        this.storageVersion = storageVersion;
+    }
+
+    public Boolean getShardEnabled() {
+        return shardEnabled;
+    }
+
+    public void setShardEnabled(Boolean shardEnabled) {
+        this.shardEnabled = shardEnabled;
+    }
+
+    public java.util.List<String> getShardRefs() {
+        return shardRefs;
+    }
+
+    public void setShardRefs(java.util.List<String> shardRefs) {
+        this.shardRefs = shardRefs;
+    }
+
+    public String getIntegrityHash() {
+        return integrityHash;
+    }
+
+    public void setIntegrityHash(String integrityHash) {
+        this.integrityHash = integrityHash;
+    }
+
+    public String getCompressionType() {
+        return compressionType;
+    }
+
+    public void setCompressionType(String compressionType) {
+        this.compressionType = compressionType;
+    }
+
+    public Long getOriginalSize() {
+        return originalSize;
+    }
+
+    public void setOriginalSize(Long originalSize) {
+        this.originalSize = originalSize;
+    }
+
+    public Long getCompressedSize() {
+        return compressedSize;
+    }
+
+    public void setCompressedSize(Long compressedSize) {
+        this.compressedSize = compressedSize;
+    }
+
+    public String getDatabaseFilesGridfsId() {
+        return databaseFilesGridfsId;
+    }
+
+    public void setDatabaseFilesGridfsId(String databaseFilesGridfsId) {
+        this.databaseFilesGridfsId = databaseFilesGridfsId;
+    }
+
+    public String getDownloadedFilesGridfsId() {
+        return downloadedFilesGridfsId;
+    }
+
+    public void setDownloadedFilesGridfsId(String downloadedFilesGridfsId) {
+        this.downloadedFilesGridfsId = downloadedFilesGridfsId;
     }
 
     /**

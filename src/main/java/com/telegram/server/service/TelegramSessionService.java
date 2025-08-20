@@ -2,6 +2,7 @@ package com.telegram.server.service;
 
 import com.telegram.server.entity.TelegramSession;
 import com.telegram.server.repository.TelegramSessionRepository;
+import com.telegram.server.service.SessionStorageManager;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -50,9 +51,11 @@ public class TelegramSessionService {
     @Autowired
     private TelegramSessionRepository sessionRepository;
 
+    @Autowired
+    private SessionStorageManager sessionStorageManager;
+
     /**
-     * 当前服务实例ID
-     * 用于标识当前服务实例
+     * 应用名称，用于区分不同的服务实例
      */
     @Value("${spring.application.name:magic-telegram-server}")
     private String applicationName;
@@ -222,6 +225,7 @@ public class TelegramSessionService {
 
     /**
      * 保存session文件数据到MongoDB
+     * 使用分片存储管理器处理大文件存储
      * 
      * @param phoneNumber 手机号码
      * @param sessionPath session文件路径
@@ -238,11 +242,12 @@ public class TelegramSessionService {
             
             // 读取数据库文件
             Map<String, String> databaseFiles = readSessionFiles(sessionPath);
-            session.setDatabaseFiles(databaseFiles);
             
             // 读取下载文件信息
             Map<String, String> downloadedFiles = readDownloadedFiles(sessionPath + "/downloads");
-            session.setDownloadedFiles(downloadedFiles);
+            
+            // 使用SessionStorageManager存储数据
+            session = sessionStorageManager.storeSession(session, databaseFiles, downloadedFiles);
             
             session.setUpdatedTime(LocalDateTime.now());
             sessionRepository.save(session);
@@ -274,6 +279,9 @@ public class TelegramSessionService {
             // 创建session目录
             Path sessionDir = Paths.get(sessionPath);
             Files.createDirectories(sessionDir);
+            
+            // 使用SessionStorageManager加载完整的session数据
+            session = sessionStorageManager.loadSession(session.getId());
             
             // 恢复数据库文件
             if (session.getDatabaseFiles() != null) {
@@ -415,8 +423,12 @@ public class TelegramSessionService {
         try {
             Optional<TelegramSession> sessionOpt = sessionRepository.findByPhoneNumber(phoneNumber);
             if (sessionOpt.isPresent()) {
-                sessionRepository.delete(sessionOpt.get());
-                logger.info("删除session: {}", phoneNumber);
+                TelegramSession session = sessionOpt.get();
+                // 使用SessionStorageManager删除分片数据
+                boolean shardDeleted = sessionStorageManager.deleteSession(session.getId());
+                // 删除主session记录
+                sessionRepository.delete(session);
+                logger.info("删除session: {}, 分片数据删除: {}", phoneNumber, shardDeleted);
                 return true;
             }
             logger.warn("未找到要删除的session: {}", phoneNumber);
@@ -514,5 +526,26 @@ public class TelegramSessionService {
         }
         
         return stats;
+    }
+    
+    /**
+     * 获取所有session数据
+     * 
+     * 用于数据完整性检查和系统诊断，返回数据库中的所有session记录。
+     * 
+     * @return 所有session的列表
+     * 
+     * @author liubo
+     * @since 2025-01-20
+     */
+    public List<TelegramSession> getAllSessions() {
+        try {
+            List<TelegramSession> sessions = sessionRepository.findAll();
+            logger.debug("获取所有session数据，共{}条记录", sessions.size());
+            return sessions;
+        } catch (Exception e) {
+            logger.error("获取所有session数据失败", e);
+            return new ArrayList<>();
+        }
     }
 }

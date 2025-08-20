@@ -2,6 +2,7 @@ package com.telegram.server;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.context.annotation.ComponentScan;
 
 /**
  * Magic Telegram Server 主应用类
@@ -13,6 +14,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
  * @since 2025-08-05
  */
 @SpringBootApplication
+@ComponentScan(basePackages = {"com.telegram.server", "com.magictelegram"})
 public class MagicTelegramServerApplication {
 
     /**

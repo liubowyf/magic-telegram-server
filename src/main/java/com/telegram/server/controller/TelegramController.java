@@ -332,4 +332,33 @@ public class TelegramController {
         
         return ResponseEntity.ok(health);
     }
+    
+    /**
+     * 检查MongoDB中的session数据状态
+     * 
+     * 用于诊断session数据完整性问题，检查数据库中存储的session信息。
+     * 包括认证状态、文件数据、活跃状态等关键信息。
+     * 
+     * @return ResponseEntity 包含session数据检查结果
+     *         - sessions: session列表及详细信息
+     *         - summary: 数据统计摘要
+     *         - issues: 发现的数据问题
+     * 
+     * @author liubo
+     * @since 2025-01-20
+     */
+    @GetMapping("/session/check")
+    public ResponseEntity<Map<String, Object>> checkSessionData() {
+        Map<String, Object> response = new HashMap<>();
+        try {
+            Map<String, Object> checkResult = telegramService.checkSessionDataIntegrity();
+            response.put("success", true);
+            response.put("data", checkResult);
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            response.put("success", false);
+            response.put("message", "检查session数据失败: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
+        }
+    }
 }

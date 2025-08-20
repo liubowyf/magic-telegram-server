@@ -40,13 +40,137 @@ server:
 
 # Telegram配置
 telegram:
+  # TDLight客户端配置
+  tdlight:
+    api-id: ${TELEGRAM_API_ID:}
+    api-hash: ${TELEGRAM_API_HASH:}
+    phone-number: ${TELEGRAM_PHONE_NUMBER:}
+    session-timeout-ms: 1800000  # 30分钟
+    connection-timeout-ms: 30000  # 30秒
+    enable-logging: false
+    log-level: INFO
+  
+  # 时区配置
+  timezone:
+    default-zone: UTC
+    store-in-utc: true
+    auto-detect-user-timezone: false
+    display-zone: Asia/Shanghai
+  
+  # 重试配置
+  retry:
+    # TDLight重试配置
+    tdlight:
+      max-attempts: 3
+      initial-delay-ms: 1000
+      max-delay-ms: 30000
+      multiplier: 2.0
+      timeout-ms: 60000
+      circuit-breaker:
+        failure-threshold: 5
+        recovery-timeout-ms: 60000
+        half-open-max-calls: 3
+    
+    # 网络重试配置
+    network:
+      max-attempts: 5
+      initial-delay-ms: 500
+      max-delay-ms: 10000
+      multiplier: 1.5
+      timeout-ms: 30000
+      circuit-breaker:
+        failure-threshold: 3
+        recovery-timeout-ms: 30000
+        half-open-max-calls: 2
+  
+  # 路径配置
+  path:
+    data-directory: ${TELEGRAM_DATA_DIR:}
+    session-directory: ${TELEGRAM_SESSION_DIR:}
+    log-directory: ${TELEGRAM_LOG_DIR:}
+    temp-directory: ${TELEGRAM_TEMP_DIR:}
+    auto-create-directories: true
+    validate-paths: true
+  
+  # 原有配置保持不变
   session:
-    path: ${java.io.tmpdir}/telegram-session  # 使用系统临时目录，主要依赖MongoDB存储
+    path: /Users/liubo/Downloads/telegram-session  # 使用系统临时目录，主要依赖MongoDB存储
+    downloads:
+      path: /Users/liubo/Downloads/telegram-downloads  # 下载文件临时目录
+      temp-path: /Users/liubo/Downloads/telegram-downloads/temp  # 下载临时目录
+    
+    # Session存储配置
+    storage:
+      # 存储策略: custom_shard(自定义分片) 或 gridfs(GridFS)
+      strategy: gridfs
+      # 分片阈值(字节) - 超过此大小使用分片存储
+      shard:
+        threshold: 8388608  # 8MB
+      # GridFS配置
+      gridfs:
+        enabled: true
+        bucket-name: telegram_sessions
+        chunk-size: 261120  # 255KB
+        compression:
+          enabled: true
+          algorithm: gzip
+          threshold: 1048576  # 1MB
+        integrity:
+          enabled: true
+          algorithm: sha256
+        migration:
+          enabled: true
+          auto-migrate-on-read: true
+          batch-size: 100
   proxy:
     enabled: true
     host: 127.0.0.1
     port: 7890
     type: socks5
+
+# 消息存储配置
+message:
+  storage:
+    # 基础配置
+    enabled: true                    # 是否启用消息存储
+    batch-save-size: 100            # 批量保存大小
+    batch-save-timeout: 5000        # 批量保存超时时间(毫秒)
+    queue-capacity: 10000           # 队列容量
+    
+    # GridFS配置
+    gridfs:
+      enabled: true                  # 是否启用GridFS文件存储
+      bucket-name: telegram_files   # GridFS bucket名称
+      chunk-size: 261120            # 文件块大小(字节)
+      max-file-size: 52428800       # 最大文件大小(50MB)
+      auto-cleanup: true            # 是否自动清理过期文件
+      cleanup-interval: 86400       # 清理间隔(秒)
+    
+    # 线程池配置
+    thread-pool:
+      core-size: 4                  # 核心线程数
+      max-size: 8                   # 最大线程数
+      queue-capacity: 1000          # 队列容量
+      keep-alive-seconds: 60        # 线程空闲时间
+      thread-name-prefix: "msg-storage-"  # 线程名称前缀
+    
+    # 性能监控配置
+    monitoring:
+      enabled: true                 # 是否启用性能监控
+      stats-interval: 60            # 统计信息输出间隔(秒)
+      
+    # 去重配置
+    deduplication:
+      enabled: true                 # 是否启用消息去重
+      
+    # 重试配置
+    retry:
+      max-attempts: 3               # 最大重试次数
+      delay-ms: 1000               # 重试间隔(毫秒)
+      
+    # 日志配置
+    logging:
+      verbose: false                # 是否启用详细日志
 
 # 管理端点配置
 management:

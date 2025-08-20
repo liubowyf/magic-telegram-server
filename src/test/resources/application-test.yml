@@ -1,0 +1,65 @@
+# 测试环境配置
+# @author liubo
+# @date 2025-01-19
+
+spring:
+  profiles:
+    active: test
+  
+  # 数据库配置
+  data:
+    mongodb:
+      host: localhost
+      port: 27017
+      database: magic_telegram_test
+      
+  # JPA配置
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: true
+    
+  # 日志配置
+  logging:
+    level:
+      com.telegram.server: DEBUG
+      org.springframework: INFO
+      
+# 消息存储配置
+message:
+  storage:
+    enabled: true
+    batch-size: 10
+    batch-timeout: 1000
+    queue-capacity: 100
+    core-pool-size: 1
+    max-pool-size: 2
+    keep-alive-time: 30
+    monitoring-enabled: true
+    statistics-interval: 30
+    deduplication-enabled: true
+    retry-attempts: 2
+    retry-interval: 500
+    verbose-logging: true
+
+# TDLight配置
+tdlight:
+  api-id: 12345
+  api-hash: "test-hash"
+  database-directory: "./test-tdlib"
+  files-directory: "./test-files"
+  use-test-dc: true
+  
+# 服务器配置
+server:
+  port: 0  # 随机端口，避免测试冲突
+  
+# 管理端点配置
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: always
