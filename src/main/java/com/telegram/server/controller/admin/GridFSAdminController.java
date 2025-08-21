@@ -24,7 +24,7 @@ import java.util.stream.Collectors;
  */
 @RestController
 @RequestMapping("/admin/gridfs")
-@ConditionalOnProperty(name = "session.storage.strategy", havingValue = "gridfs")
+@ConditionalOnProperty(name = "telegram.session.storage.strategy", havingValue = "gridfs")
 public class GridFSAdminController {
 
     private static final Logger logger = LoggerFactory.getLogger(GridFSAdminController.class);

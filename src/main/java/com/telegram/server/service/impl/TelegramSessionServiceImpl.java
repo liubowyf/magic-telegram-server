@@ -4,12 +4,19 @@ import com.telegram.server.entity.TelegramSession;
 import com.telegram.server.service.ITelegramSessionService;
 import com.telegram.server.repository.TelegramSessionRepository;
 import com.telegram.server.service.gridfs.GridFSStorageManager;
+import com.telegram.server.dto.AccountDTO;
+import com.telegram.server.dto.PageRequestDTO;
+import com.telegram.server.dto.PageResponseDTO;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 
 import java.io.File;
 import java.io.IOException;
@@ -20,6 +27,7 @@ import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+import org.springframework.beans.factory.annotation.Value;
 
 /**
  * Telegram Session管理服务
@@ -54,6 +62,12 @@ public class TelegramSessionServiceImpl implements ITelegramSessionService {
 
     @Autowired
     private GridFSStorageManager gridfsStorageManager;
+
+    /**
+     * Session路径配置
+     */
+    @Value("${telegram.session.path:./telegram-session}")
+    private String sessionPath;
 
     /**
      * 应用名称，用于区分不同的服务实例
@@ -696,5 +710,226 @@ public class TelegramSessionServiceImpl implements ITelegramSessionService {
             logger.error("获取所有session数据失败", e);
             return new ArrayList<>();
         }
+    }
+
+    // ==================== Web管理系统API方法实现 ====================
+    
+    /**
+     * 分页获取账号列表
+     * 
+     * @param pageRequest 分页请求参数
+     * @return 分页响应结果
+     * 
+     * @author liubo
+     * @since 2025-01-21
+     */
+    @Override
+    public PageResponseDTO<AccountDTO> getAccountsPage(PageRequestDTO pageRequest) {
+        try {
+            // 创建分页参数
+            Pageable pageable = PageRequest.of(
+                pageRequest.getPage(), // 前端传递的页码已经是从0开始
+                pageRequest.getSize(),
+                Sort.by(Sort.Direction.DESC, "updatedTime")
+            );
+            
+            // 查询分页数据
+            Page<TelegramSession> sessionPage = sessionRepository.findAll(pageable);
+            
+            // 转换为DTO
+            List<AccountDTO> accountDTOs = sessionPage.getContent().stream()
+                .map(this::convertToAccountDTO)
+                .collect(Collectors.toList());
+            
+            // 构建分页响应
+            return new PageResponseDTO<AccountDTO>(
+                accountDTOs,
+                pageRequest.getPage(), // 保持与前端一致的页码
+                pageRequest.getSize(),
+                sessionPage.getTotalElements()
+            );
+            
+        } catch (Exception e) {
+            logger.error("分页获取账号列表失败", e);
+            return new PageResponseDTO<AccountDTO>(new ArrayList<AccountDTO>(), pageRequest.getPage(), pageRequest.getSize(), 0L);
+        }
+    }
+    
+    /**
+     * 根据ID获取账号详情
+     * 
+     * @param accountId 账号ID（手机号）
+     * @return 账号详情
+     * 
+     * @author liubo
+     * @since 2025-01-21
+     */
+    @Override
+    public Optional<AccountDTO> getAccountById(String accountId) {
+        try {
+            Optional<TelegramSession> sessionOpt = sessionRepository.findByPhoneNumber(accountId);
+            return sessionOpt.map(this::convertToAccountDTO);
+        } catch (Exception e) {
+            logger.error("根据ID获取账号详情失败: {}", accountId, e);
+            return Optional.empty();
+        }
+    }
+    
+    /**
+     * 删除账号
+     * 
+     * @param accountId 账号ID（手机号）
+     * @return 是否删除成功
+     * 
+     * @author liubo
+     * @since 2025-01-21
+     */
+    @Override
+    public boolean deleteAccount(String accountId) {
+        try {
+            Optional<TelegramSession> sessionOpt = sessionRepository.findByPhoneNumber(accountId);
+            if (sessionOpt.isPresent()) {
+                TelegramSession session = sessionOpt.get();
+                
+                // 清理本地session文件
+                try {
+                    logger.info("正在清理账号{}的本地session文件...", accountId);
+                    deleteLocalSessionFiles(accountId);
+                    logger.info("账号{}的本地session文件已清理", accountId);
+                } catch (Exception e) {
+                    logger.warn("清理账号{}的本地session文件时出现错误: {}", accountId, e.getMessage());
+                    // 继续执行删除操作，即使清理文件失败
+                }
+                
+                // 使用GridFSStorageManager删除session数据（包括GridFS文件）
+                try {
+                    gridfsStorageManager.deleteSession(session.getId());
+                } catch (Exception e) {
+                    logger.warn("删除账号{}的GridFS数据时出现错误: {}", accountId, e.getMessage());
+                }
+                
+                // 删除session记录
+                sessionRepository.delete(session);
+                logger.info("成功删除账号: {}", accountId);
+                return true;
+            } else {
+                logger.warn("要删除的账号不存在: {}", accountId);
+                return false;
+            }
+        } catch (Exception e) {
+            logger.error("删除账号失败: {}", accountId, e);
+            return false;
+        }
+    }
+
+    /**
+     * 删除本地session文件
+     * 
+     * @param phoneNumber 手机号
+     * 
+     * @author liubo
+     * @since 2025-01-21
+     */
+    private void deleteLocalSessionFiles(String phoneNumber) {
+        try {
+            Path sessionDir = Paths.get(sessionPath);
+            if (!Files.exists(sessionDir)) {
+                logger.debug("Session目录不存在: {}", sessionDir);
+                return;
+            }
+
+            // 删除与该手机号相关的所有session文件
+            try (Stream<Path> files = Files.walk(sessionDir)) {
+                files.filter(Files::isRegularFile)
+                     .filter(path -> {
+                         String fileName = path.getFileName().toString();
+                         // 匹配包含手机号的session文件
+                         return fileName.contains(phoneNumber) || 
+                                fileName.startsWith("td_") || 
+                                fileName.endsWith(".binlog") ||
+                                fileName.endsWith(".session");
+                     })
+                     .forEach(path -> {
+                         try {
+                             Files.deleteIfExists(path);
+                             logger.debug("已删除session文件: {}", path);
+                         } catch (IOException e) {
+                             logger.warn("删除session文件失败: {}, 错误: {}", path, e.getMessage());
+                         }
+                     });
+            }
+            
+            logger.info("已清理账号{}的本地session文件", phoneNumber);
+        } catch (Exception e) {
+            logger.error("清理本地session文件时发生错误: {}", phoneNumber, e);
+            throw new RuntimeException("清理本地session文件失败", e);
+        }
+    }
+    
+    /**
+     * 获取账号总数
+     * 
+     * @return 账号总数
+     * 
+     * @author liubo
+     * @since 2025-01-21
+     */
+    @Override
+    public long getAccountCount() {
+        try {
+            return sessionRepository.count();
+        } catch (Exception e) {
+            logger.error("获取账号总数失败", e);
+            return 0L;
+        }
+    }
+    
+    /**
+     * 获取活跃账号数量
+     * 
+     * @return 活跃账号数量
+     * 
+     * @author liubo
+     * @since 2025-01-21
+     */
+    @Override
+    public long getActiveAccountCount() {
+        try {
+            return sessionRepository.countByIsActiveTrue();
+        } catch (Exception e) {
+            logger.error("获取活跃账号数量失败", e);
+            return 0L;
+        }
+    }
+    
+    /**
+     * 将TelegramSession转换为AccountDTO
+     * 
+     * @param session TelegramSession对象
+     * @return AccountDTO对象
+     * 
+     * @author liubo
+     * @since 2025-01-21
+     */
+    private AccountDTO convertToAccountDTO(TelegramSession session) {
+        AccountDTO dto = new AccountDTO();
+        dto.setId(session.getPhoneNumber());
+        dto.setPhoneNumber(session.getPhoneNumber());
+        dto.setAuthStatus(session.getAuthState());
+        dto.setActive(session.getIsActive());
+        dto.setCreatedAt(session.getCreatedTime());
+        dto.setLastUpdated(session.getUpdatedTime());
+        dto.setLastActiveAt(session.getLastActiveTime());
+        dto.setApiId(session.getApiId());
+        dto.setApiHash(session.getApiHash());
+        
+        // 设置备注信息（从extraConfig中获取或使用默认值）
+        String remarks = "";
+        if (session.getExtraConfig() != null && session.getExtraConfig().containsKey("remarks")) {
+            remarks = (String) session.getExtraConfig().get("remarks");
+        }
+        dto.setRemarks(remarks != null ? remarks : "");
+        
+        return dto;
     }
 }

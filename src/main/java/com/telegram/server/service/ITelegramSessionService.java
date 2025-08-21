@@ -157,4 +157,44 @@ public interface ITelegramSessionService {
      * @return 所有session的列表
      */
     List<TelegramSession> getAllSessions();
+
+    // ==================== Web管理系统API方法 ====================
+    
+    /**
+     * 分页获取账号列表
+     * 
+     * @param pageRequest 分页请求参数
+     * @return 分页响应结果
+     */
+    com.telegram.server.dto.PageResponseDTO<com.telegram.server.dto.AccountDTO> getAccountsPage(com.telegram.server.dto.PageRequestDTO pageRequest);
+    
+    /**
+     * 根据ID获取账号详情
+     * 
+     * @param accountId 账号ID（手机号）
+     * @return 账号详情
+     */
+    Optional<com.telegram.server.dto.AccountDTO> getAccountById(String accountId);
+    
+    /**
+     * 删除账号
+     * 
+     * @param accountId 账号ID（手机号）
+     * @return 是否删除成功
+     */
+    boolean deleteAccount(String accountId);
+    
+    /**
+     * 获取账号总数
+     * 
+     * @return 账号总数
+     */
+    long getAccountCount();
+    
+    /**
+     * 获取活跃账号数量
+     * 
+     * @return 活跃账号数量
+     */
+    long getActiveAccountCount();
 }

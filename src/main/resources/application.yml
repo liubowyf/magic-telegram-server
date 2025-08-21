@@ -172,12 +172,7 @@ message:
     logging:
       verbose: false                # 是否启用详细日志
 
-# Session存储配置
-session:
-  storage:
-    strategy: gridfs              # 使用GridFS存储策略
-    shard:
-      threshold: 8388608          # GridFS阈值(8MB)
+# Session存储配置已合并到telegram.session配置段中
 
 # 管理端点配置
 management:

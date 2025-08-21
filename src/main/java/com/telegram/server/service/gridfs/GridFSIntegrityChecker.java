@@ -24,7 +24,7 @@ import java.util.zip.GZIPInputStream;
  * @date 2025-01-19
  */
 @Service
-@ConditionalOnProperty(name = "session.storage.strategy", havingValue = "gridfs")
+@ConditionalOnProperty(name = "telegram.session.storage.strategy", havingValue = "gridfs")
 public class GridFSIntegrityChecker {
 
     private static final Logger logger = LoggerFactory.getLogger(GridFSIntegrityChecker.class);

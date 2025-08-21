@@ -1293,6 +1293,13 @@ public class TelegramServiceImpl implements ITelegramService {
             
             // 保存session到MongoDB
             saveSessionToMongoDB();
+            
+            // 激活session状态
+            String currentPhoneNumber = runtimePhoneNumber != null ? runtimePhoneNumber : phoneNumber;
+            if (currentPhoneNumber != null) {
+                sessionService.activateSession(currentPhoneNumber);
+                logger.info("✅ Session已激活: {}", currentPhoneNumber);
+            }
         } else if (authState instanceof TdApi.AuthorizationStateWaitPhoneNumber) {
             logger.info("⏳ 等待输入手机号码 - 请调用 /api/telegram/phone 接口提交手机号");
         } else if (authState instanceof TdApi.AuthorizationStateWaitCode) {

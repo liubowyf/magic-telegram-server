@@ -17,6 +17,12 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import com.telegram.server.monitor.MessageStorageMonitor;
 import com.telegram.server.config.MessageStorageConfig;
+import com.telegram.server.dto.MessageDTO;
+import com.telegram.server.dto.PageRequestDTO;
+import com.telegram.server.dto.PageResponseDTO;
+import java.util.stream.Collectors;
+import java.util.ArrayList;
+import java.util.Base64;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -123,9 +129,14 @@ public class TelegramMessageServiceImpl implements ITelegramMessageService {
     public CompletableFuture<Boolean> updateImageDataAsync(String accountPhone, Long chatId, Long messageId,
                                                            String imageData, String imageFilename, 
                                                            String imageMimeType, String imageStatus) {
-        // 检查Spring容器状态
-        if (!isApplicationContextActive()) {
-            logger.warn("Spring容器正在关闭，跳过异步图片数据更新");
+        try {
+            // 检查Spring容器状态
+            if (!isApplicationContextActive()) {
+                logger.warn("Spring容器未就绪或正在关闭，跳过异步图片数据更新");
+                return CompletableFuture.completedFuture(false);
+            }
+        } catch (Exception e) {
+            logger.error("检查图片数据更新前置条件时发生异常: {}", e.getMessage());
             return CompletableFuture.completedFuture(false);
         }
 
@@ -169,7 +180,12 @@ public class TelegramMessageServiceImpl implements ITelegramMessageService {
      * @return 容器是否活跃
      */
     private boolean isApplicationContextActive() {
-        return lifecycleManager.isApplicationContextActive();
+        try {
+            return lifecycleManager != null && lifecycleManager.isApplicationContextActive();
+        } catch (Exception e) {
+            logger.warn("检查Spring容器状态时发生异常: {}", e.getMessage());
+            return false;
+        }
     }
 
     /**
@@ -181,20 +197,25 @@ public class TelegramMessageServiceImpl implements ITelegramMessageService {
      */
     @Async("messageProcessingExecutor")
     public CompletableFuture<Boolean> saveMessageAsync(TelegramMessage message) {
-        // 检查Spring容器状态
-        if (!isApplicationContextActive()) {
-            logger.warn("Spring容器正在关闭，跳过异步消息保存");
-            return CompletableFuture.completedFuture(false);
-        }
+        try {
+            // 检查Spring容器状态
+            if (!isApplicationContextActive()) {
+                logger.warn("Spring容器未就绪或正在关闭，跳过异步消息保存");
+                return CompletableFuture.completedFuture(false);
+            }
 
-        if (message == null) {
-            logger.warn("尝试保存空消息，跳过处理");
-            return CompletableFuture.completedFuture(false);
-        }
+            if (message == null) {
+                logger.warn("尝试保存空消息，跳过处理");
+                return CompletableFuture.completedFuture(false);
+            }
 
-        // 检查是否启用消息存储
-        if (!config.isEnabled()) {
-            logger.debug("消息存储功能已禁用，跳过保存");
+            // 检查是否启用消息存储
+            if (!config.isEnabled()) {
+                logger.debug("消息存储功能已禁用，跳过保存");
+                return CompletableFuture.completedFuture(false);
+            }
+        } catch (Exception e) {
+            logger.error("检查消息保存前置条件时发生异常: {}", e.getMessage());
             return CompletableFuture.completedFuture(false);
         }
 
@@ -343,19 +364,24 @@ public class TelegramMessageServiceImpl implements ITelegramMessageService {
      */
     @Async(ASYNC_EXECUTOR)
     public CompletableFuture<Integer> saveMessagesAsync(List<TelegramMessage> messages) {
-        // 检查Spring容器状态
-        if (!isApplicationContextActive()) {
-            logger.warn("Spring容器正在关闭，跳过批量异步消息保存");
-            return CompletableFuture.completedFuture(0);
-        }
+        try {
+            // 检查Spring容器状态
+            if (!isApplicationContextActive()) {
+                logger.warn("Spring容器未就绪或正在关闭，跳过批量异步消息保存");
+                return CompletableFuture.completedFuture(0);
+            }
 
-        if (messages == null || messages.isEmpty()) {
-            return CompletableFuture.completedFuture(0);
-        }
-        
-        // 检查是否启用消息存储
-        if (!config.isEnabled()) {
-            logger.debug("消息存储功能已禁用，跳过批量保存");
+            if (messages == null || messages.isEmpty()) {
+                return CompletableFuture.completedFuture(0);
+            }
+            
+            // 检查是否启用消息存储
+            if (!config.isEnabled()) {
+                logger.debug("消息存储功能已禁用，跳过批量保存");
+                return CompletableFuture.completedFuture(0);
+            }
+        } catch (Exception e) {
+            logger.error("检查批量消息保存前置条件时发生异常: {}", e.getMessage());
             return CompletableFuture.completedFuture(0);
         }
         
@@ -823,6 +849,126 @@ public class TelegramMessageServiceImpl implements ITelegramMessageService {
         savedMessageCount.set(0);
         duplicateMessageCount.set(0);
         logger.info("性能统计计数器已重置");
+    }
+
+    // ==================== Web管理系统API方法 ====================
+
+    /**
+     * 分页获取消息列表
+     * 
+     * @param pageRequest 分页请求参数
+     * @return 分页消息响应
+     */
+    @Override
+    public PageResponseDTO<MessageDTO> getMessagesPage(PageRequestDTO pageRequest) {
+        try {
+            int page = Math.max(0, pageRequest.getPage()); // 前端传递的页码已经是从0开始
+            int size = Math.max(1, Math.min(pageRequest.getSize(), 100)); // 限制每页最大100条
+            
+            Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "messageDate"));
+            Page<TelegramMessage> messagePage = messageRepository.findAll(pageable);
+            
+            List<MessageDTO> messageDTOs = messagePage.getContent().stream()
+                    .map(this::convertToMessageDTO)
+                    .collect(Collectors.toList());
+            
+            return new PageResponseDTO<>(
+                    messageDTOs,
+                    pageRequest.getPage(),
+                    size,
+                    messagePage.getTotalElements()
+            );
+        } catch (Exception e) {
+            logger.error("分页获取消息列表失败: {}", e.getMessage(), e);
+            return new PageResponseDTO<>(new ArrayList<>(), pageRequest.getPage(), pageRequest.getSize(), 0L);
+        }
+    }
+
+    /**
+     * 根据ID获取消息详情
+     * 
+     * @param messageId 消息ID
+     * @return 消息详情
+     */
+    @Override
+    public Optional<MessageDTO> getMessageById(String messageId) {
+        try {
+            Optional<TelegramMessage> messageOpt = messageRepository.findById(messageId);
+            if (messageOpt.isPresent()) {
+                return Optional.of(convertToMessageDTO(messageOpt.get()));
+            }
+            logger.warn("未找到ID为{}的消息", messageId);
+            return Optional.empty();
+        } catch (Exception e) {
+            logger.error("根据ID获取消息详情失败: messageId={}, error={}", messageId, e.getMessage(), e);
+            return Optional.empty();
+        }
+    }
+
+    /**
+     * 获取消息图片数据
+     * 
+     * @param messageId 消息ID
+     * @return Base64编码的图片数据
+     */
+    @Override
+    public Optional<String> getMessageImage(String messageId) {
+        try {
+            Optional<TelegramMessage> messageOpt = messageRepository.findById(messageId);
+            if (messageOpt.isPresent()) {
+                TelegramMessage message = messageOpt.get();
+                String imageData = message.getImageData();
+                if (imageData != null && !imageData.isEmpty()) {
+                    return Optional.of(imageData);
+                }
+            }
+            logger.warn("消息{}没有图片数据", messageId);
+            return Optional.empty();
+        } catch (Exception e) {
+            logger.error("获取消息图片数据失败: messageId={}, error={}", messageId, e.getMessage(), e);
+            return Optional.empty();
+        }
+    }
+
+    /**
+     * 获取消息总数
+     * 
+     * @return 消息总数
+     */
+    @Override
+    public long getMessageCount() {
+        try {
+            return messageRepository.count();
+        } catch (Exception e) {
+            logger.error("获取消息总数失败: {}", e.getMessage(), e);
+            return 0L;
+        }
+    }
+
+    /**
+     * 将TelegramMessage转换为MessageDTO
+     * 
+     * @param message Telegram消息实体
+     * @return 消息DTO
+     */
+    private MessageDTO convertToMessageDTO(TelegramMessage message) {
+        MessageDTO dto = new MessageDTO();
+        dto.setId(message.getId());
+        dto.setChatId(message.getChatId());
+        dto.setMessageId(message.getMessageId());
+        dto.setMessageType(message.getMessageType());
+        dto.setTextContent(message.getMessageText());
+        dto.setSenderName(message.getSenderName());
+        dto.setMessageTime(message.getMessageDate());
+        dto.setCreatedAt(message.getCreatedTime());
+        dto.setHasImage(message.getImageData() != null && !message.getImageData().isEmpty());
+        dto.setImageFilename(message.getImageFilename());
+        dto.setImageMimeType(message.getImageMimeType());
+        dto.setImageStatus(message.getImageStatus());
+        dto.setChatTitle(message.getChatTitle());
+        dto.setSenderId(message.getSenderId());
+        dto.setRawMessageData(message.getRawMessageJson());
+        return dto;
     }
 
 }

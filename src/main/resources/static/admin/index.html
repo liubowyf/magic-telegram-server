@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Telegram 管理系统</title>
+    <link rel="stylesheet" href="css/admin.css">
+    <link rel="stylesheet" href="css/auth-modal.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body>
+    <div id="app">
+        <!-- 侧边栏 -->
+        <nav class="sidebar">
+            <div class="sidebar-header">
+                <h2><i class="fas fa-paper-plane"></i> Telegram 管理</h2>
+            </div>
+            <ul class="sidebar-menu">
+                <li class="menu-item active" data-page="dashboard">
+                    <i class="fas fa-tachometer-alt"></i>
+                    <span>仪表盘</span>
+                </li>
+                <li class="menu-item" data-page="accounts">
+                    <i class="fas fa-users"></i>
+                    <span>账号管理</span>
+                </li>
+                <li class="menu-item" data-page="messages">
+                    <i class="fas fa-comments"></i>
+                    <span>消息管理</span>
+                </li>
+                <li class="menu-item" data-page="settings">
+                    <i class="fas fa-cog"></i>
+                    <span>系统设置</span>
+                </li>
+            </ul>
+        </nav>
+
+        <!-- 主内容区 -->
+        <main class="main-content">
+            <!-- 顶部导航栏 -->
+            <header class="top-header">
+                <div class="header-left">
+                    <button class="sidebar-toggle">
+                        <i class="fas fa-bars"></i>
+                    </button>
+                    <h1 class="page-title">仪表盘</h1>
+                </div>
+                <div class="header-right">
+                    <div class="user-info">
+                        <span class="username">管理员</span>
+                        <button class="logout-btn">
+                            <i class="fas fa-sign-out-alt"></i>
+                        </button>
+                    </div>
+                </div>
+            </header>
+
+            <!-- 页面内容容器 -->
+            <div class="page-container">
+                <!-- 仪表盘页面 -->
+                <div id="dashboard-page" class="page active">
+                    <div class="stats-grid">
+                        <div class="stat-card">
+                            <div class="stat-icon">
+                                <i class="fas fa-users"></i>
+                            </div>
+                            <div class="stat-content">
+                                <h3 id="total-accounts">0</h3>
+                                <p>总账号数</p>
+                            </div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-icon">
+                                <i class="fas fa-user-check"></i>
+                            </div>
+                            <div class="stat-content">
+                                <h3 id="active-accounts">0</h3>
+                                <p>活跃账号</p>
+                            </div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-icon">
+                                <i class="fas fa-comments"></i>
+                            </div>
+                            <div class="stat-content">
+                                <h3 id="total-messages">0</h3>
+                                <p>总消息数</p>
+                            </div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-icon">
+                                <i class="fas fa-chart-line"></i>
+                            </div>
+                            <div class="stat-content">
+                                <h3 id="today-messages">0</h3>
+                                <p>今日消息</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 账号管理页面 -->
+                <div id="accounts-page" class="page">
+                    <div class="page-header">
+                        <h2>账号管理</h2>
+                        <button class="btn btn-primary" id="add-account-btn">
+                            <i class="fas fa-plus"></i> 添加账号
+                        </button>
+                    </div>
+                    <div class="table-container">
+                        <table class="data-table" id="accounts-table">
+                            <thead>
+                                <tr>
+                                    <th>手机号</th>
+                                    <th>认证状态</th>
+                                    <th>活跃状态</th>
+                                    <th>创建时间</th>
+                                    <th>最后活跃</th>
+                                    <th>操作</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <!-- 动态加载数据 -->
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="pagination" id="accounts-pagination">
+                        <!-- 分页控件 -->
+                    </div>
+                </div>
+
+                <!-- 消息管理页面 -->
+                <div id="messages-page" class="page">
+                    <div class="page-header">
+                        <h2>消息管理</h2>
+                        <div class="search-box">
+                            <input type="text" id="message-search" placeholder="搜索消息...">
+                            <button class="btn btn-secondary" id="search-btn">
+                                <i class="fas fa-search"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="table-container">
+                        <table class="data-table" id="messages-table">
+                            <thead>
+                                <tr>
+                                    <th>消息ID</th>
+                                    <th>群组</th>
+                                    <th>发送者</th>
+                                    <th>内容</th>
+                                    <th>类型</th>
+                                    <th>时间</th>
+                                    <th>操作</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <!-- 动态加载数据 -->
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="pagination" id="messages-pagination">
+                        <!-- 分页控件 -->
+                    </div>
+                </div>
+
+                <!-- 设置页面 -->
+                <div id="settings-page" class="page">
+                    <div class="page-header">
+                        <h2>系统设置</h2>
+                    </div>
+                    <div class="settings-content">
+                        <div class="setting-section">
+                            <h3>系统配置</h3>
+                            <div class="setting-item">
+                                <label>自动清理过期消息</label>
+                                <input type="checkbox" id="auto-cleanup">
+                            </div>
+                            <div class="setting-item">
+                                <label>消息保留天数</label>
+                                <input type="number" id="retention-days" value="30">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- 模态框 -->
+    <div id="modal-overlay" class="modal-overlay">
+        <div class="modal">
+            <div class="modal-header">
+                <h3 class="modal-title">标题</h3>
+                <button class="modal-close">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <!-- 动态内容 -->
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" id="modal-cancel">取消</button>
+                <button class="btn btn-primary" id="modal-confirm">确认</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 加载指示器 -->
+    <div id="loading" class="loading">
+        <div class="spinner"></div>
+        <p>加载中...</p>
+    </div>
+
+    <script src="js/utils.js"></script>
+    <script src="js/api.js"></script>
+    <script src="js/components.js"></script>
+    <script src="js/components/auth-modal.js"></script>
+    <script src="js/admin.js"></script>
+</body>
+</html>

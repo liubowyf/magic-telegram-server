@@ -302,7 +302,40 @@ public interface ITelegramMessageService {
     }
 
     /**
-     * 重置性能统计计数器
+     * 重置统计信息
      */
     void resetStats();
+
+    // ==================== Web管理系统API方法 ====================
+    
+    /**
+     * 分页获取消息列表
+     * 
+     * @param pageRequest 分页请求参数
+     * @return 分页响应结果
+     */
+    com.telegram.server.dto.PageResponseDTO<com.telegram.server.dto.MessageDTO> getMessagesPage(com.telegram.server.dto.PageRequestDTO pageRequest);
+    
+    /**
+     * 根据ID获取消息详情
+     * 
+     * @param messageId 消息ID
+     * @return 消息详情
+     */
+    Optional<com.telegram.server.dto.MessageDTO> getMessageById(String messageId);
+    
+    /**
+     * 获取消息图片数据
+     * 
+     * @param messageId 消息ID
+     * @return 图片数据（Base64编码）
+     */
+    Optional<String> getMessageImage(String messageId);
+    
+    /**
+     * 获取消息总数
+     * 
+     * @return 消息总数
+     */
+    long getMessageCount();
 }

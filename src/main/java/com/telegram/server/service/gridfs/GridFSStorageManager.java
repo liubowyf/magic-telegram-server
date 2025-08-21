@@ -36,7 +36,7 @@ import com.mongodb.client.gridfs.model.GridFSFile;
  * @date 2025-01-20
  */
 @Service
-@ConditionalOnProperty(name = "session.storage.strategy", havingValue = "gridfs")
+@ConditionalOnProperty(name = "telegram.session.storage.strategy", havingValue = "gridfs")
 public class GridFSStorageManager {
 
     private static final Logger logger = LoggerFactory.getLogger(GridFSStorageManager.class);
