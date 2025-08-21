@@ -9,7 +9,7 @@
 - 👤 单账户管理和认证
 - 🔄 实时监听Telegram群组消息
 - 🌐 支持SOCKS5代理访问
-- 📝 消息实时输出到控制台
+- 📝 消息实时写入到MongoDB进行持久化
 - 🔐 自动会话管理和持久化
 - 💾 **GridFS智能存储** - 基于MongoDB GridFS的高效Session存储方案
 - 🗜️ **数据压缩优化** - 自动GZIP压缩，节省存储空间
@@ -27,10 +27,6 @@
 
 ## 配置说明
 
-### Telegram API配置
-- API ID: 请通过 `/telegram/config` 接口配置
-- API Hash: 请通过 `/telegram/config` 接口配置
-- 手机号: 请通过 `/telegram/auth/phone` 接口配置
 
 ### 代理配置
 - 类型: SOCKS5
