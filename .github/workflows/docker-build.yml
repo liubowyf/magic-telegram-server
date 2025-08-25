@@ -212,7 +212,7 @@ jobs:
             
             # 检查镜像架构
             echo "🏗️  镜像架构信息:"
-            docker buildx imagetools inspect "$TAG" --format '{{json .}}' | jq -r '.manifests[] | "平台: " + .platform.os + "/" + .platform.architecture'
+            docker buildx imagetools inspect "$TAG" --format '{{json .}}' | jq -r '.manifests[]? | select(.platform != null) | "平台: " + .platform.os + "/" + .platform.architecture'
             
           else
             echo "❌ 镜像拉取失败: $TAG"
