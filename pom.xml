@@ -57,28 +57,12 @@
             <!-- 版本由BOM管理 -->
         </dependency>
 
-        <!-- TDLight Natives - 多平台支持 -->
-        <!-- macOS Intel (x86_64) -->
-        <dependency>
-            <groupId>it.tdlight</groupId>
-            <artifactId>tdlight-natives</artifactId>
-            <classifier>macos_amd64</classifier>
-            <!-- 版本由BOM管理 -->
-        </dependency>
-        
+        <!-- TDLight Natives - Linux平台支持 -->
         <!-- Linux x86_64 (GNU GCC with OpenSSL 1.x) -->
         <dependency>
             <groupId>it.tdlight</groupId>
             <artifactId>tdlight-natives</artifactId>
             <classifier>linux_amd64_gnu_ssl1</classifier>
-            <!-- 版本由BOM管理 -->
-        </dependency>
-        
-        <!-- Windows x86_64 -->
-        <dependency>
-            <groupId>it.tdlight</groupId>
-            <artifactId>tdlight-natives</artifactId>
-            <classifier>windows_amd64</classifier>
             <!-- 版本由BOM管理 -->
         </dependency>
 
