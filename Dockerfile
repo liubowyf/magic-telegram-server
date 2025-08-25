@@ -59,28 +59,17 @@ RUN apt-get update && apt-get install -y \
         tzdata \
     && rm -rf /var/lib/apt/lists/*
 
-# 创建非root用户
-RUN if ! getent group telegram > /dev/null 2>&1; then groupadd -g 1000 telegram; fi && \
-    if ! getent passwd telegram > /dev/null 2>&1; then useradd -r -u 1000 -g telegram -s /bin/bash telegram; fi
-
 # 设置工作目录
 WORKDIR /app
 
-# 创建必要的目录并设置权限
-RUN mkdir -p /app/logs /app/data /app/config && \
-    if getent passwd telegram > /dev/null 2>&1; then chown -R telegram:telegram /app; fi
+# 创建必要的目录
+RUN mkdir -p /app/logs /app/data /app/config
 
 # 从构建阶段复制JAR文件
 COPY --from=builder /build/target/*.jar app.jar
 
 # 显示运行时平台信息
 RUN echo "运行时架构: $(uname -m)"
-
-# 设置文件权限
-RUN chown telegram:telegram app.jar
-
-# 切换到非root用户
-USER telegram
 
 # 设置环境变量
 ENV JAVA_OPTS="-Xms512m -Xmx1024m -XX:+UseG1GC -XX:+UseContainerSupport" \
