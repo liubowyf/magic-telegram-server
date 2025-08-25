@@ -38,38 +38,38 @@ jobs:
         key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml') }}
         restore-keys: ${{ runner.os }}-m2
         
-    # 4. 配置Maven设置（添加镜像仓库）
+    # 4. 配置Maven设置（添加TDLight仓库）
     - name: Setup Maven settings
       uses: s4u/maven-settings-action@v3.1.0
       with:
-        mirrors: |
-          [
-            {
-              "id": "mchv-mirror",
-              "name": "MCHV Mirror via Maven Central",
-              "mirrorOf": "mchv",
-              "url": "https://repo1.maven.org/maven2"
-            },
-            {
-              "id": "central-mirror",
-              "name": "Central Repository Mirror",
-              "mirrorOf": "central",
-              "url": "https://repo1.maven.org/maven2"
-            }
-          ]
         repositories: |
           [
             {
               "id": "central",
-              "name": "Central Repository",
+              "name": "Maven Central Repository",
               "url": "https://repo1.maven.org/maven2",
               "snapshots": {"enabled": false}
             },
             {
-              "id": "sonatype-snapshots",
-              "name": "Sonatype Snapshots",
-              "url": "https://oss.sonatype.org/content/repositories/snapshots",
+              "id": "tdlight",
+              "name": "TDLight Repository",
+              "url": "https://mvn.mchv.eu/repository/mchv/",
               "snapshots": {"enabled": true}
+            },
+            {
+              "id": "spring-releases",
+              "name": "Spring Releases",
+              "url": "https://repo.spring.io/release",
+              "snapshots": {"enabled": false}
+            }
+          ]
+        pluginRepositories: |
+          [
+            {
+              "id": "central",
+              "name": "Maven Plugin Repository",
+              "url": "https://repo1.maven.org/maven2",
+              "snapshots": {"enabled": false}
             }
           ]
         
