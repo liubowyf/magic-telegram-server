@@ -8,7 +8,7 @@ import org.slf4j.LoggerFactory;
  * 处理数据压缩失败的情况，提供降级和重试策略
  * 
  * @author liubo
- * @date 2024-12-19
+ * @date 2025-08-20
  */
 public class CompressionExceptionHandler {
     

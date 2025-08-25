@@ -5,7 +5,7 @@ package com.telegram.server.storage.util;
  * 用于计算安全的分片大小，确保不超过MongoDB文档大小限制
  * 
  * @author liubo
- * @date 2024-12-19
+ * @date 2025-08-20
  */
 public class ShardSizeCalculator {
     

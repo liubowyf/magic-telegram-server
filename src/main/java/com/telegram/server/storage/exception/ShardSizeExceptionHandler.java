@@ -8,7 +8,7 @@ import org.slf4j.LoggerFactory;
  * 处理分片大小超限的情况，提供降级和优化建议
  * 
  * @author liubo
- * @date 2024-12-19
+ * @date 2025-08-20
  */
 public class ShardSizeExceptionHandler {
     

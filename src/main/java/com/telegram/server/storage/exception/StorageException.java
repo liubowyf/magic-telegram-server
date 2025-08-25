@@ -5,7 +5,7 @@ package com.telegram.server.storage.exception;
  * 用于表示分片存储过程中发生的各种异常情况
  * 
  * @author liubo
- * @date 2024-12-19
+ * @date 2025-08-20
  */
 public class StorageException extends Exception {
     

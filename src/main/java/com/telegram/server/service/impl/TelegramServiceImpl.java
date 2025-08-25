@@ -292,7 +292,7 @@ public class TelegramServiceImpl implements ITelegramService {
      * 优先从MongoDB获取可用session，如果没有则回退到配置文件
      * 
      * @author liubo
-     * @date 2024-12-20
+     * @date 2025-08-25
      */
     private void loadConfigFromMongoDB() {
         try {
@@ -318,7 +318,7 @@ public class TelegramServiceImpl implements ITelegramService {
      * 
      * @return 是否成功加载
      * @author liubo
-     * @date 2024-12-20
+     * @date 2025-08-25
      */
     private boolean loadFromAvailableSession() {
         List<TelegramSession> availableSessions = sessionService.getAvailableSessions();
@@ -342,7 +342,7 @@ public class TelegramServiceImpl implements ITelegramService {
      * 
      * @param session Telegram会话
      * @author liubo
-     * @date 2024-12-20
+     * @date 2025-08-25
      */
     private void setConfigurationFromSession(TelegramSession session) {
         this.apiId = session.getApiId();
@@ -360,7 +360,7 @@ public class TelegramServiceImpl implements ITelegramService {
      * 
      * @param session Telegram会话
      * @author liubo
-     * @date 2024-12-20
+     * @date 2025-08-25
      */
     private void activateAndRestoreSession(TelegramSession session) {
         // 激活此session
@@ -374,7 +374,7 @@ public class TelegramServiceImpl implements ITelegramService {
      * 如果配置已加载，则迁移到MongoDB
      * 
      * @author liubo
-     * @date 2024-12-20
+     * @date 2025-08-25
      */
     private void migrateConfigIfLoaded() {
         if (this.apiId != null && this.apiHash != null && this.phoneNumber != null) {
@@ -1030,7 +1030,7 @@ public class TelegramServiceImpl implements ITelegramService {
      * @param contentType 内容类型
      * @param messageJson 消息JSON对象
      * @author liubo
-     * @date 2024-12-20
+     * @date 2025-08-25
      */
     private void saveMessageToMongoDB(TdApi.Message message, TdApi.Chat chat, String messageText, String contentType, ObjectNode messageJson) {
         try {
@@ -1056,7 +1056,7 @@ public class TelegramServiceImpl implements ITelegramService {
      * 创建TelegramMessage实体
      * @return TelegramMessage实体
      * @author liubo
-     * @date 2024-12-20
+     * @date 2025-08-25
      */
     private TelegramMessage createTelegramMessageEntity() {
         return new TelegramMessage();
@@ -1068,7 +1068,7 @@ public class TelegramServiceImpl implements ITelegramService {
      * @param message Telegram消息对象
      * @param chat 聊天对象
      * @author liubo
-     * @date 2024-12-20
+     * @date 2025-08-25
      */
     private void setBasicMessageInfo(TelegramMessage telegramMessage, TdApi.Message message, TdApi.Chat chat) {
         telegramMessage.setAccountPhone(this.runtimePhoneNumber != null ? this.runtimePhoneNumber : this.phoneNumber);
@@ -1082,7 +1082,7 @@ public class TelegramServiceImpl implements ITelegramService {
      * @param telegramMessage TelegramMessage实体
      * @param chat 聊天对象
      * @author liubo
-     * @date 2024-12-20
+     * @date 2025-08-25
      */
     private void setChatTypeInfo(TelegramMessage telegramMessage, TdApi.Chat chat) {
         String chatType = "unknown";
@@ -1104,7 +1104,7 @@ public class TelegramServiceImpl implements ITelegramService {
      * @param telegramMessage TelegramMessage实体
      * @param message Telegram消息对象
      * @author liubo
-     * @date 2024-12-20
+     * @date 2025-08-25
      */
     /**
      * 安全地设置发送者信息到TelegramMessage实体
@@ -1144,7 +1144,7 @@ public class TelegramServiceImpl implements ITelegramService {
      * @param messageText 消息文本
      * @param contentType 内容类型
      * @author liubo
-     * @date 2024-12-20
+     * @date 2025-08-25
      */
     private void setMessageContentInfo(TelegramMessage telegramMessage, String messageText, String contentType) {
         telegramMessage.setMessageText(messageText);
@@ -1155,7 +1155,7 @@ public class TelegramServiceImpl implements ITelegramService {
      * 设置时间信息
      * @param telegramMessage TelegramMessage实体
      * @author liubo
-     * @date 2024-12-20
+     * @date 2025-08-25
      */
     private void setTimeInfo(TelegramMessage telegramMessage) {
         // created_time: 当前真实北京时间（数据写入时间）
@@ -1169,7 +1169,7 @@ public class TelegramServiceImpl implements ITelegramService {
      * @param telegramMessage TelegramMessage实体
      * @param message Telegram消息对象
      * @author liubo
-     * @date 2024-12-20
+     * @date 2025-08-25
      */
     private void setReplyInfo(TelegramMessage telegramMessage, TdApi.Message message) {
         if (message.replyTo != null && message.replyTo instanceof TdApi.MessageReplyToMessage) {
@@ -1183,7 +1183,7 @@ public class TelegramServiceImpl implements ITelegramService {
      * @param telegramMessage TelegramMessage实体
      * @param message Telegram消息对象
      * @author liubo
-     * @date 2024-12-20
+     * @date 2025-08-25
      */
     private void setForwardInfo(TelegramMessage telegramMessage, TdApi.Message message) {
         if (message.forwardInfo != null) {
@@ -1197,7 +1197,7 @@ public class TelegramServiceImpl implements ITelegramService {
      * @param telegramMessage TelegramMessage实体
      * @param message Telegram消息对象
      * @author liubo
-     * @date 2024-12-20
+     * @date 2025-08-25
      */
     private void setMessageStatusInfo(TelegramMessage telegramMessage, TdApi.Message message) {
         telegramMessage.setIsPinned(message.isPinned);
@@ -1212,7 +1212,7 @@ public class TelegramServiceImpl implements ITelegramService {
      * @param telegramMessage TelegramMessage实体
      * @param message Telegram消息对象
      * @author liubo
-     * @date 2024-12-20
+     * @date 2025-08-25
      */
     private void setThreadAndAlbumInfo(TelegramMessage telegramMessage, TdApi.Message message) {
         if (message.messageThreadId > 0) {
@@ -1228,7 +1228,7 @@ public class TelegramServiceImpl implements ITelegramService {
      * @param telegramMessage TelegramMessage实体
      * @param message Telegram消息对象
      * @author liubo
-     * @date 2024-12-20
+     * @date 2025-08-25
      */
     private void setInteractionInfo(TelegramMessage telegramMessage, TdApi.Message message) {
         if (message.interactionInfo != null) {
@@ -1242,7 +1242,7 @@ public class TelegramServiceImpl implements ITelegramService {
      * @param telegramMessage TelegramMessage实体
      * @param messageJson 消息JSON对象
      * @author liubo
-     * @date 2024-12-20
+     * @date 2025-08-25
      */
     private void setRawJsonData(TelegramMessage telegramMessage, ObjectNode messageJson) {
         telegramMessage.setRawMessageJson(messageJson.toString());
@@ -1253,7 +1253,7 @@ public class TelegramServiceImpl implements ITelegramService {
      * @param telegramMessage TelegramMessage实体
      * @param message Telegram消息对象
      * @author liubo
-     * @date 2024-12-20
+     * @date 2025-08-25
      */
     private void saveMessageAsync(TelegramMessage telegramMessage, TdApi.Message message) {
         messageService.saveMessageAsync(telegramMessage).whenComplete((result, throwable) -> {
@@ -3195,7 +3195,7 @@ public class TelegramServiceImpl implements ITelegramService {
      * 
      * @return 包含授权状态详细信息的Map对象
      * @author liubo
-     * @since 2024-12-19
+     * @since 2025-08-05
      */
     public Map<String, Object> getAuthStatus() {
         Map<String, Object> status = new HashMap<>();
@@ -3216,7 +3216,7 @@ public class TelegramServiceImpl implements ITelegramService {
      * 
      * @return 未初始化状态的Map对象
      * @author liubo
-     * @since 2024-12-19
+     * @since 2025-08-25
      */
     private Map<String, Object> createNotInitializedStatus() {
         Map<String, Object> status = new HashMap<>();
@@ -3236,7 +3236,7 @@ public class TelegramServiceImpl implements ITelegramService {
      * 
      * @param status 状态信息Map对象
      * @author liubo
-     * @since 2024-12-19
+     * @since 2025-08-25
      */
     private void populateAuthStateInfo(Map<String, Object> status) {
         if (currentAuthState instanceof TdApi.AuthorizationStateReady) {
@@ -3259,7 +3259,7 @@ public class TelegramServiceImpl implements ITelegramService {
      * 
      * @param status 状态信息Map对象
      * @author liubo
-     * @since 2024-12-19
+     * @since 2025-08-25
      */
     private void populateReadyState(Map<String, Object> status) {
         status.put("status", "READY");
@@ -3276,7 +3276,7 @@ public class TelegramServiceImpl implements ITelegramService {
      * 
      * @param status 状态信息Map对象
      * @author liubo
-     * @since 2024-12-19
+     * @since 2025-08-25
      */
     private void populateWaitPhoneState(Map<String, Object> status) {
         status.put("status", "WAIT_PHONE");
@@ -3294,7 +3294,7 @@ public class TelegramServiceImpl implements ITelegramService {
      * 
      * @param status 状态信息Map对象
      * @author liubo
-     * @since 2024-12-19
+     * @since 2025-08-25
      */
     private void populateWaitCodeState(Map<String, Object> status) {
         status.put("status", "WAIT_CODE");
@@ -3312,7 +3312,7 @@ public class TelegramServiceImpl implements ITelegramService {
      * 
      * @param status 状态信息Map对象
      * @author liubo
-     * @since 2024-12-19
+     * @since 2025-08-25
      */
     private void populateWaitPasswordState(Map<String, Object> status) {
         status.put("status", "WAIT_PASSWORD");
@@ -3330,7 +3330,7 @@ public class TelegramServiceImpl implements ITelegramService {
      * 
      * @param status 状态信息Map对象
      * @author liubo
-     * @since 2024-12-19
+     * @since 2025-08-25
      */
     private void populateClosedState(Map<String, Object> status) {
         status.put("status", "CLOSED");
@@ -3347,7 +3347,7 @@ public class TelegramServiceImpl implements ITelegramService {
      * 
      * @param status 状态信息Map对象
      * @author liubo
-     * @since 2024-12-19
+     * @since 2025-08-25
      */
     private void populateUnknownState(Map<String, Object> status) {
         String stateName = currentAuthState != null ? currentAuthState.getClass().getSimpleName() : "null";
@@ -3367,7 +3367,7 @@ public class TelegramServiceImpl implements ITelegramService {
      * 这是使用系统的第一步操作。
      * 
      * @author liubo
-     * @since 2024-12-19
+     * @since 2025-08-25
      */
     public void initializeAccount() {
         try {
@@ -3399,7 +3399,7 @@ public class TelegramServiceImpl implements ITelegramService {
      * 停止Telegram消息监听功能，但保持客户端连接。
      * 
      * @author liubo
-     * @since 2024-12-19
+     * @since 2025-08-25
      */
     public void stopListening() {
         try {
@@ -3428,7 +3428,7 @@ public class TelegramServiceImpl implements ITelegramService {
      * 清理后需要重新进行认证流程。
      * 
      * @author liubo
-     * @since 2024-12-19
+     * @since 2025-08-25
      */
     public void clearSession() {
         try {
@@ -3629,7 +3629,7 @@ public class TelegramServiceImpl implements ITelegramService {
      * 
      * @return 包含检查结果的Map对象
      * @author liubo
-     * @date 2024-12-19
+     * @date 2025-08-05
      */
     public Map<String, Object> checkSessionDataIntegrity() {
         Map<String, Object> result = new HashMap<>();
@@ -3669,7 +3669,7 @@ public class TelegramServiceImpl implements ITelegramService {
      * @param issues 问题列表
      * @return Session详细信息列表
      * @author liubo
-     * @date 2024-12-19
+     * @date 2025-08-25
      */
     private List<Map<String, Object>> processAllSessions(List<TelegramSession> allSessions, 
                                                          SessionIntegrityStats stats, 
@@ -3703,7 +3703,7 @@ public class TelegramServiceImpl implements ITelegramService {
      * @param session Session对象
      * @return Session信息Map
      * @author liubo
-     * @date 2024-12-19
+     * @date 2025-08-25
      */
     private Map<String, Object> createSessionInfo(TelegramSession session) {
         Map<String, Object> sessionInfo = new HashMap<>();
@@ -3723,7 +3723,7 @@ public class TelegramServiceImpl implements ITelegramService {
      * @param session Session对象
      * @param stats 统计信息对象
      * @author liubo
-     * @date 2024-12-19
+     * @date 2025-08-25
      */
     private void updateSessionStats(TelegramSession session, SessionIntegrityStats stats) {
         if (Boolean.TRUE.equals(session.getIsActive())) {
@@ -3743,7 +3743,7 @@ public class TelegramServiceImpl implements ITelegramService {
      * @param stats 统计信息对象
      * @return 文件信息Map
      * @author liubo
-     * @date 2024-12-19
+     * @date 2025-08-25
      */
     private Map<String, Object> analyzeSessionFiles(TelegramSession session, List<String> issues, SessionIntegrityStats stats) {
         Map<String, Object> fileInfo = new HashMap<>();
@@ -3765,7 +3765,7 @@ public class TelegramServiceImpl implements ITelegramService {
      * @param issues 问题列表
      * @return 文件信息Map
      * @author liubo
-     * @date 2024-12-19
+     * @date 2025-08-25
      */
     private Map<String, Object> analyzeExistingFiles(TelegramSession session, 
                                                      Map<String, Object> fileInfo, 
@@ -3807,7 +3807,7 @@ public class TelegramServiceImpl implements ITelegramService {
      * @param issues 问题列表
      * @return 文件信息Map
      * @author liubo
-     * @date 2024-12-19
+     * @date 2025-08-25
      */
     private Map<String, Object> analyzeMissingFiles(TelegramSession session, 
                                                     Map<String, Object> fileInfo, 
@@ -3831,7 +3831,7 @@ public class TelegramServiceImpl implements ITelegramService {
      * @param session Session对象
      * @return 问题列表
      * @author liubo
-     * @date 2024-12-19
+     * @date 2025-08-25
      */
     private List<String> validateSessionConsistency(TelegramSession session) {
         List<String> sessionIssues = new java.util.ArrayList<>();
@@ -3862,7 +3862,7 @@ public class TelegramServiceImpl implements ITelegramService {
      * @param totalIssues 总问题数
      * @return 摘要信息Map
      * @author liubo
-     * @date 2024-12-19
+     * @date 2025-08-25
      */
     private Map<String, Object> generateIntegritySummary(SessionIntegrityStats stats, int totalIssues) {
         Map<String, Object> summary = new HashMap<>();
@@ -3891,7 +3891,7 @@ public class TelegramServiceImpl implements ITelegramService {
      * Session完整性统计信息内部类
      * 
      * @author liubo
-     * @date 2024-12-19
+     * @date 2025-08-25
      */
     private static class SessionIntegrityStats {
         int totalSessions = 0;

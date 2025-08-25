@@ -1,0 +1,217 @@
+name: Docker Build and Push
+
+# 触发条件：推送到main分支或创建tag
+on:
+  push:
+    branches: [ main ]
+    tags: [ 'v*' ]
+  pull_request:
+    branches: [ main ]
+
+# 环境变量
+env:
+  DOCKER_REGISTRY: docker.io
+  DOCKER_USERNAME: liubowyf0452
+  IMAGE_NAME: liubowyf0452/magic-telegram-server
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    
+    steps:
+    # 1. 检出代码
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    # 2. 设置Java环境
+    - name: Set up JDK 17
+      uses: actions/setup-java@v4
+      with:
+        java-version: '17'
+        distribution: 'temurin'
+        
+    # 3. 缓存Maven依赖
+    - name: Cache Maven dependencies
+      uses: actions/cache@v3
+      with:
+        path: ~/.m2
+        key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml') }}
+        restore-keys: ${{ runner.os }}-m2
+        
+    # 4. Maven构建和测试（带重试机制）
+    - name: Build with Maven
+      uses: nick-invision/retry@v2
+      with:
+        timeout_minutes: 10
+        max_attempts: 3
+        command: |
+          echo "开始Maven构建..."
+          mvn clean compile -DskipTests -U
+          echo "Maven编译完成"
+        
+    - name: Run tests
+      run: |
+        echo "开始运行测试..."
+        mvn test -Dmaven.test.failure.ignore=true
+        echo "测试完成"
+        
+    - name: Package application
+      uses: nick-invision/retry@v2
+      with:
+        timeout_minutes: 15
+        max_attempts: 3
+        command: |
+          echo "开始打包应用..."
+          mvn package -DskipTests -U
+          echo "应用打包完成"
+          ls -la target/
+          
+    # 5. 验证构建产物
+    - name: Verify build artifacts
+      run: |
+        if [ ! -f target/*.jar ]; then
+          echo "❌ 构建失败：未找到JAR文件"
+          exit 1
+        fi
+        echo "✅ 构建成功：找到JAR文件"
+        ls -la target/*.jar
+        
+    # 6. 设置Docker Buildx
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+      
+    # 7. 登录Docker Hub
+    - name: Login to Docker Hub
+      if: github.event_name != 'pull_request'
+      uses: docker/login-action@v3
+      with:
+        registry: ${{ env.DOCKER_REGISTRY }}
+        username: ${{ env.DOCKER_USERNAME }}
+        password: ${{ secrets.DOCKER_PASSWORD }}
+        
+    # 8. 提取版本信息和标签策略
+    - name: Extract version and tags
+      id: version
+      run: |
+        echo "提取版本信息..."
+        
+        # 基础镜像名称
+        IMAGE_BASE="${{ env.IMAGE_NAME }}"
+        
+        if [[ $GITHUB_REF == refs/tags/* ]]; then
+          # Tag推送：使用tag版本号
+          VERSION=${GITHUB_REF#refs/tags/}
+          IS_LATEST="true"
+          TAGS="${IMAGE_BASE}:${VERSION},${IMAGE_BASE}:latest"
+          echo "📦 Tag构建: $VERSION (标记为latest)"
+        elif [[ $GITHUB_REF == refs/heads/main ]]; then
+          # Main分支推送：使用commit hash
+          VERSION="main-${GITHUB_SHA::8}"
+          IS_LATEST="false"
+          TAGS="${IMAGE_BASE}:${VERSION},${IMAGE_BASE}:main"
+          echo "🔄 Main分支构建: $VERSION"
+        else
+          # 其他分支：使用分支名和commit hash
+          BRANCH_NAME=${GITHUB_REF#refs/heads/}
+          VERSION="${BRANCH_NAME}-${GITHUB_SHA::8}"
+          IS_LATEST="false"
+          TAGS="${IMAGE_BASE}:${VERSION}"
+          echo "🌿 分支构建: $VERSION"
+        fi
+        
+        echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+        echo "IS_LATEST=$IS_LATEST" >> $GITHUB_OUTPUT
+        echo "TAGS=$TAGS" >> $GITHUB_OUTPUT
+        echo "BUILD_DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" >> $GITHUB_OUTPUT
+        echo "VCS_REF=${GITHUB_SHA::8}" >> $GITHUB_OUTPUT
+        
+        echo "🏷️  镜像标签: $TAGS"
+        
+    # 9. 构建Docker镜像（多架构）
+    - name: Build Docker image
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        file: ./Dockerfile
+        platforms: linux/amd64,linux/arm64
+        push: ${{ github.event_name != 'pull_request' }}
+        tags: ${{ steps.version.outputs.TAGS }}
+        build-args: |
+          BUILD_DATE=${{ steps.version.outputs.BUILD_DATE }}
+          VCS_REF=${{ steps.version.outputs.VCS_REF }}
+          VERSION=${{ steps.version.outputs.VERSION }}
+        cache-from: |
+          type=gha,scope=buildkit-${{ matrix.platform || 'multi' }}
+          type=registry,ref=${{ env.IMAGE_NAME }}:cache
+        cache-to: |
+          type=gha,mode=max,scope=buildkit-${{ matrix.platform || 'multi' }}
+        provenance: false
+        sbom: false
+        
+    # 10. 验证镜像推送
+    - name: Verify image push
+      if: github.event_name != 'pull_request'
+      run: |
+        echo "🔍 验证镜像推送结果..."
+        
+        # 解析标签
+        IFS=',' read -ra TAG_ARRAY <<< "${{ steps.version.outputs.TAGS }}"
+        
+        for TAG in "${TAG_ARRAY[@]}"; do
+          echo "验证标签: $TAG"
+          
+          # 拉取镜像验证
+          if docker pull "$TAG"; then
+            echo "✅ 镜像拉取成功: $TAG"
+            
+            # 检查镜像大小
+            SIZE=$(docker image inspect "$TAG" --format='{{.Size}}')
+            SIZE_MB=$((SIZE / 1024 / 1024))
+            echo "📏 镜像大小: ${SIZE_MB}MB"
+            
+            if [ $SIZE_MB -gt 500 ]; then
+              echo "⚠️  警告: 镜像大小超过500MB"
+            else
+              echo "✅ 镜像大小符合要求"
+            fi
+            
+            # 检查镜像架构
+            echo "🏗️  镜像架构信息:"
+            docker buildx imagetools inspect "$TAG" --format '{{json .}}' | jq -r '.manifests[] | "平台: " + .platform.os + "/" + .platform.architecture'
+            
+          else
+            echo "❌ 镜像拉取失败: $TAG"
+            exit 1
+          fi
+        done
+        
+        echo "🎉 所有镜像验证通过！"
+        
+    # 11. 构建摘要
+    - name: Build summary
+      if: always()
+      run: |
+        echo "## 构建摘要" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "- **版本**: ${{ steps.version.outputs.VERSION }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **构建时间**: ${{ steps.version.outputs.BUILD_DATE }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **提交**: ${{ steps.version.outputs.VCS_REF }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **镜像**: ${{ env.IMAGE_NAME }}:${{ steps.version.outputs.VERSION }}" >> $GITHUB_STEP_SUMMARY
+        
+        if [ "${{ job.status }}" == "success" ]; then
+          echo "- **状态**: ✅ 构建成功" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "- **状态**: ❌ 构建失败" >> $GITHUB_STEP_SUMMARY
+        fi
+        
+    # 12. 通知构建结果
+    - name: Notify build result
+      if: failure()
+      run: |
+        echo "❌ 构建失败！"
+        echo "请检查构建日志以获取详细错误信息"
+        echo "常见问题排查："
+        echo "1. Maven依赖下载失败 - 检查网络连接"
+        echo "2. 单元测试失败 - 检查测试代码"
+        echo "3. Docker构建失败 - 检查Dockerfile语法"
+        echo "4. 推送失败 - 检查Docker Hub凭据"

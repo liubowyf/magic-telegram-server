@@ -1,0 +1,112 @@
+# =================================
+# Magic Telegram Server - 外部MongoDB部署
+# 作者: liubo
+# 日期: 2025-01-15
+# 描述: 仅部署应用服务，连接外部MongoDB
+# =================================
+
+version: '3.8'
+
+services:
+  # Telegram应用服务
+  app:
+    image: liubowyf0452/magic-telegram-server:${APP_VERSION:-latest}
+    container_name: magic-telegram-app
+    restart: unless-stopped
+    environment:
+      # Spring配置
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-production}
+      SERVER_PORT: ${SERVER_PORT:-8080}
+      
+      # 外部MongoDB连接配置
+      SPRING_DATA_MONGODB_URI: ${MONGODB_URI}
+      
+      # 或者使用分离的配置（如果不使用URI）
+      SPRING_DATA_MONGODB_HOST: ${MONGODB_HOST}
+      SPRING_DATA_MONGODB_PORT: ${MONGODB_PORT:-27017}
+      SPRING_DATA_MONGODB_DATABASE: ${MONGODB_DATABASE:-telegram_db}
+      SPRING_DATA_MONGODB_USERNAME: ${MONGODB_USERNAME}
+      SPRING_DATA_MONGODB_PASSWORD: ${MONGODB_PASSWORD}
+      SPRING_DATA_MONGODB_AUTHENTICATION_DATABASE: ${MONGODB_AUTH_DATABASE:-admin}
+      
+      # SSL配置（如果需要）
+      SPRING_DATA_MONGODB_SSL_ENABLED: ${MONGODB_SSL_ENABLED:-false}
+      
+      # JVM配置
+      JAVA_OPTS: >
+        -Xms${JVM_XMS:-512m} 
+        -Xmx${JVM_XMX:-1g} 
+        -XX:+UseG1GC 
+        -XX:+UseContainerSupport 
+        -XX:MaxRAMPercentage=${JVM_MAX_RAM_PERCENTAGE:-75.0}
+      
+      # 时区配置
+      TZ: ${TIMEZONE:-Asia/Shanghai}
+      
+      # Telegram Bot配置（必须设置）
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
+      TELEGRAM_BOT_USERNAME: ${TELEGRAM_BOT_USERNAME}
+      
+      # 日志配置
+      LOGGING_LEVEL_ROOT: ${LOG_LEVEL:-INFO}
+      LOGGING_LEVEL_COM_TELEGRAM: ${APP_LOG_LEVEL:-DEBUG}
+    ports:
+      - "${APP_PORT:-8080}:8080"
+    volumes:
+      - app_logs:/app/logs
+      - app_data:/app/data
+    networks:
+      - telegram-network
+    healthcheck:
+      test: curl -f http://localhost:8080/actuator/health || exit 1
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+# 网络配置
+networks:
+  telegram-network:
+    driver: bridge
+    name: magic-telegram-external-network
+
+# 数据卷配置
+volumes:
+  app_logs:
+    driver: local
+    name: magic-telegram-app-logs
+  app_data:
+    driver: local
+    name: magic-telegram-app-data
+
+# =================================
+# 使用说明:
+# 
+# 1. 复制环境变量文件:
+#    cp .env.external.example .env
+# 
+# 2. 编辑.env文件，设置必要的环境变量:
+#    - TELEGRAM_BOT_TOKEN（必须）
+#    - TELEGRAM_BOT_USERNAME（必须）
+#    - MONGODB_URI（推荐）或分离的MongoDB配置
+# 
+# 3. 启动服务:
+#    docker-compose -f docker-compose.external.yml up -d
+# 
+# 4. 查看日志:
+#    docker-compose -f docker-compose.external.yml logs -f
+# 
+# 5. 停止服务:
+#    docker-compose -f docker-compose.external.yml down
+# 
+# 6. 完全清理（包括数据）:
+#    docker-compose -f docker-compose.external.yml down -v
+# 
+# 访问地址:
+# - 应用: http://localhost:8080
+# 
+# 注意事项:
+# - 确保外部MongoDB服务可访问
+# - 检查网络连接和防火墙设置
+# - 验证MongoDB认证信息正确
+# =================================

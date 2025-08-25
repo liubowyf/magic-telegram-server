@@ -16,7 +16,7 @@ import java.util.concurrent.ThreadPoolExecutor;
  * 配置消息处理的线程池，优化大量群组消息的处理性能
  * 
  * @author liubo
- * @date 2024-12-19
+ * @date 2025-08-19
  */
 @Configuration
 @EnableAsync

@@ -1,7 +1,7 @@
 /**
  * API接口管理
  * @author liubo
- * @date 2024-12-19
+ * @date 2025-08-21
  */
 
 // API基础配置

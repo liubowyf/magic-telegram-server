@@ -18,7 +18,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * 提供智能重试机制，支持指数退避、熔断器模式和异常分类处理
  * 
  * @author liubo
- * @date 2024-12-19
+ * @date 2025-08-19
  */
 @Component
 public class RetryHandler {

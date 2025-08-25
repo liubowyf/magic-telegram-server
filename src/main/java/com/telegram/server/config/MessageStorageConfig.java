@@ -13,7 +13,7 @@ import java.util.concurrent.ThreadPoolExecutor;
  * 用于配置Telegram消息存储的相关参数
  * 
  * @author liubo
- * @date 2024-12-19
+ * @date 2025-08-19
  */
 @Configuration
 @ConfigurationProperties(prefix = "message.storage")

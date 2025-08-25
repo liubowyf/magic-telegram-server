@@ -18,7 +18,7 @@ import java.util.concurrent.TimeUnit;
  * 包含TDLight客户端配置、时区配置、重试配置和路径配置
  * 
  * @author liubo
- * @date 2024-12-19
+ * @date 2025-08-19
  */
 @Configuration
 @ConfigurationProperties(prefix = "telegram")

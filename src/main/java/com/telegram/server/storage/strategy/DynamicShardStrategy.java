@@ -15,7 +15,7 @@ import java.util.zip.GZIPOutputStream;
  * 根据数据特征动态调整分片大小，优化存储效率
  * 
  * @author liubo
- * @date 2024-12-19
+ * @date 2025-08-20
  */
 @Component
 public class DynamicShardStrategy {

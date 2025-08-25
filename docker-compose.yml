@@ -1,0 +1,134 @@
+# =================================
+# Magic Telegram Server - 简化版Docker Compose配置
+# 作者: liubo
+# 日期: 2025-08-25
+# 描述: 包含MongoDB的完整部署配置
+# =================================
+
+version: '3.8'
+
+services:
+  # MongoDB数据库
+  mongodb:
+    image: mongo:7.0
+    container_name: magic-telegram-mongodb
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USERNAME:-admin}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:-admin123}
+      MONGO_INITDB_DATABASE: ${MONGO_DATABASE:-telegram_db}
+    ports:
+      - "${MONGO_PORT:-27017}:27017"
+    volumes:
+      - mongodb_data:/data/db
+      - mongodb_config:/data/configdb
+    networks:
+      - telegram-network
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/test --quiet
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Telegram应用服务
+  app:
+    image: liubowyf0452/magic-telegram-server:${APP_VERSION:-latest}
+    container_name: magic-telegram-app
+    restart: unless-stopped
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    environment:
+      # Spring配置
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-docker}
+      SERVER_PORT: ${SERVER_PORT:-8080}
+      
+      # MongoDB连接配置
+      SPRING_DATA_MONGODB_HOST: mongodb
+      SPRING_DATA_MONGODB_PORT: 27017
+      SPRING_DATA_MONGODB_DATABASE: ${MONGO_DATABASE:-telegram_db}
+      SPRING_DATA_MONGODB_USERNAME: ${MONGO_ROOT_USERNAME:-admin}
+      SPRING_DATA_MONGODB_PASSWORD: ${MONGO_ROOT_PASSWORD:-admin123}
+      SPRING_DATA_MONGODB_AUTHENTICATION_DATABASE: admin
+      
+      # JVM配置
+      JAVA_OPTS: >
+        -Xms${JVM_XMS:-512m} 
+        -Xmx${JVM_XMX:-1g} 
+        -XX:+UseG1GC 
+        -XX:+UseContainerSupport 
+        -XX:MaxRAMPercentage=${JVM_MAX_RAM_PERCENTAGE:-75.0}
+      
+      # 时区配置
+      TZ: ${TIMEZONE:-Asia/Shanghai}
+      
+      # Telegram Bot配置（必须设置）
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
+      TELEGRAM_BOT_USERNAME: ${TELEGRAM_BOT_USERNAME}
+      
+      # 日志配置
+      LOGGING_LEVEL_ROOT: ${LOG_LEVEL:-INFO}
+      LOGGING_LEVEL_COM_TELEGRAM: ${APP_LOG_LEVEL:-DEBUG}
+    ports:
+      - "${APP_PORT:-8080}:8080"
+    volumes:
+      - app_logs:/app/logs
+      - app_data:/app/data
+    networks:
+      - telegram-network
+    healthcheck:
+      test: curl -f http://localhost:8080/actuator/health || exit 1
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+# 网络配置
+networks:
+  telegram-network:
+    driver: bridge
+    name: magic-telegram-network
+
+# 数据卷配置
+volumes:
+  mongodb_data:
+    driver: local
+    name: magic-telegram-mongodb-data
+  mongodb_config:
+    driver: local
+    name: magic-telegram-mongodb-config
+  app_logs:
+    driver: local
+    name: magic-telegram-app-logs
+  app_data:
+    driver: local
+    name: magic-telegram-app-data
+
+# =================================
+# 使用说明:
+# 
+# 1. 复制环境变量文件:
+#    cp .env.example .env
+# 
+# 2. 编辑.env文件，设置必要的环境变量:
+#    - TELEGRAM_BOT_TOKEN（必须）
+#    - TELEGRAM_BOT_USERNAME（必须）
+#    - MONGO_ROOT_PASSWORD（建议修改）
+# 
+# 3. 启动服务:
+#    docker-compose up -d
+# 
+# 4. 查看日志:
+#    docker-compose logs -f
+# 
+# 5. 停止服务:
+#    docker-compose down
+# 
+# 6. 完全清理（包括数据）:
+#    docker-compose down -v
+# 
+# 访问地址:
+# - 应用: http://localhost:8080
+# - MongoDB: localhost:27017
+# =================================

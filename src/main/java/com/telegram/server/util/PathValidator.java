@@ -17,7 +17,7 @@ import java.util.regex.Pattern;
  * 提供路径验证、目录创建、权限检查和路径规范化功能
  * 
  * @author liubo
- * @date 2024-12-19
+ * @date 2025-08-19
  */
 @Component
 public class PathValidator {
