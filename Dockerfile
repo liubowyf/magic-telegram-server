@@ -60,15 +60,15 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # 创建非root用户
-RUN groupadd -g 1000 telegram || true && \
-    useradd -r -u 1000 -g telegram -s /bin/bash telegram || true
+RUN if ! getent group telegram > /dev/null 2>&1; then groupadd -g 1000 telegram; fi && \
+    if ! getent passwd telegram > /dev/null 2>&1; then useradd -r -u 1000 -g telegram -s /bin/bash telegram; fi
 
 # 设置工作目录
 WORKDIR /app
 
 # 创建必要的目录并设置权限
 RUN mkdir -p /app/logs /app/data /app/config && \
-    chown -R telegram:telegram /app
+    if getent passwd telegram > /dev/null 2>&1; then chown -R telegram:telegram /app; fi
 
 # 从构建阶段复制JAR文件
 COPY --from=builder /build/target/*.jar app.jar
