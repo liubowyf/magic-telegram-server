@@ -45,7 +45,7 @@ RUN ls -la target/ && \
 # ================================
 # 第二阶段: 运行时阶段
 # ================================
-FROM eclipse-temurin:17-jre-alpine AS runtime
+FROM --platform=$TARGETPLATFORM eclipse-temurin:17-jre AS runtime
 
 # 设置维护者信息
 LABEL maintainer="liubo" \
@@ -54,14 +54,15 @@ LABEL maintainer="liubo" \
       org.opencontainers.image.source="https://github.com/your-repo/magic-telegram-server"
 
 # 安装必要的系统工具
-RUN apk add --no-cache \
+RUN apt-get update && apt-get install -y \
         curl \
         ca-certificates \
-        tzdata
+        tzdata \
+    && rm -rf /var/lib/apt/lists/*
 
 # 创建非root用户
-RUN addgroup -g 1000 telegram && \
-    adduser -D -s /bin/sh -u 1000 -G telegram telegram
+RUN groupadd -g 1000 telegram && \
+    useradd -r -u 1000 -g telegram -s /bin/bash telegram
 
 # 设置工作目录
 WORKDIR /app
