@@ -64,11 +64,12 @@
 docker run -d \
   --name magic-telegram \
   -p 8080:8080 \
-  -e TELEGRAM_API_ID=your_api_id \
-  -e TELEGRAM_API_HASH=your_api_hash \
   -e PROXY_HOST=host.docker.internal \
   -e PROXY_PORT=7890 \
   your-dockerhub-username/magic-telegram-server:latest
+
+# 启动后访问 http://localhost:8080/api/admin/index.html
+# 通过Web管理界面配置Telegram API和其他设置
 ```
 
 ### 🔧 本地开发部署
@@ -305,8 +306,6 @@ magic-telegram-server/
 docker run -d \
   --name magic-telegram \
   -p 8080:8080 \
-  -e TELEGRAM_API_ID=your_api_id \
-  -e TELEGRAM_API_HASH=your_api_hash \
   -e PROXY_HOST=host.docker.internal \
   -e PROXY_PORT=7890 \
   your-dockerhub-username/magic-telegram-server:latest
@@ -315,6 +314,8 @@ docker run -d \
 # 在浏览器中访问: http://localhost:8080/api/admin/index.html
 # 通过可视化界面完成账户创建、API配置、认证和消息监听等操作
 ```
+
+> **注意**: Telegram API配置（API_ID和API_HASH）无需在环境变量中设置，完全通过Web管理界面进行配置。
 
 ### 🔧 本地开发示例
 

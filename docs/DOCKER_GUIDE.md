@@ -62,11 +62,7 @@ docker-compose -f docker-compose.external.yml logs -f magic-telegram-server
 ### 基础配置
 
 ```bash
-# Telegram API配置
-TELEGRAM_API_ID=your_api_id
-TELEGRAM_API_HASH=your_api_hash
-
-# 代理配置（可选）
+# 代理配置（非大陆地区可选）
 PROXY_ENABLED=true
 PROXY_TYPE=SOCKS5
 PROXY_HOST=127.0.0.1
@@ -75,6 +71,8 @@ PROXY_PORT=7890
 # 服务端口
 SERVER_PORT=8080
 ```
+
+> **注意**: Telegram API配置（API_ID和API_HASH）无需在环境变量中设置，完全通过Web管理界面进行配置和管理。
 
 ### MongoDB配置（外部MongoDB）
 
