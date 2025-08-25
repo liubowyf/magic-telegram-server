@@ -2,6 +2,10 @@
 
 一个基于Spring Boot和TDLight-Java的Telegram单账户消息实时监听服务。
 
+## CI/CD状态
+
+[![Docker Build](https://github.com/your-username/magic-telegram-server/actions/workflows/docker-build.yml/badge.svg)](https://github.com/your-username/magic-telegram-server/actions/workflows/docker-build.yml)
+
 ## 功能特性
 
 - 🚀 基于Spring Boot 3.2.0构建
