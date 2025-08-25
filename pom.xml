@@ -57,11 +57,28 @@
             <!-- 版本由BOM管理 -->
         </dependency>
 
-        <!-- TDLight Natives for macOS -->
+        <!-- TDLight Natives - 多平台支持 -->
+        <!-- macOS Intel (x86_64) -->
         <dependency>
             <groupId>it.tdlight</groupId>
             <artifactId>tdlight-natives</artifactId>
             <classifier>macos_amd64</classifier>
+            <!-- 版本由BOM管理 -->
+        </dependency>
+        
+        <!-- Linux x86_64 (GNU GCC with OpenSSL 1.x) -->
+        <dependency>
+            <groupId>it.tdlight</groupId>
+            <artifactId>tdlight-natives</artifactId>
+            <classifier>linux_amd64_gnu_ssl1</classifier>
+            <!-- 版本由BOM管理 -->
+        </dependency>
+        
+        <!-- Windows x86_64 -->
+        <dependency>
+            <groupId>it.tdlight</groupId>
+            <artifactId>tdlight-natives</artifactId>
+            <classifier>windows_amd64</classifier>
             <!-- 版本由BOM管理 -->
         </dependency>
 
@@ -126,6 +143,14 @@
             <id>mchv</id>
             <name>MCHV Apache Maven Packages</name>
             <url>https://mvn.mchv.eu/repository/mchv/</url>
+            <releases>
+                <enabled>true</enabled>
+                <updatePolicy>never</updatePolicy>
+            </releases>
+            <snapshots>
+                <enabled>true</enabled>
+                <updatePolicy>never</updatePolicy>
+            </snapshots>
         </repository>
         
         <!-- Maven Central -->
@@ -133,6 +158,28 @@
             <id>central</id>
             <name>Maven Central</name>
             <url>https://repo1.maven.org/maven2</url>
+            <releases>
+                <enabled>true</enabled>
+                <updatePolicy>never</updatePolicy>
+            </releases>
+            <snapshots>
+                <enabled>false</enabled>
+            </snapshots>
         </repository>
     </repositories>
+    
+    <!-- 强制不使用镜像配置 -->
+    <pluginRepositories>
+        <pluginRepository>
+            <id>central</id>
+            <name>Maven Central</name>
+            <url>https://repo1.maven.org/maven2</url>
+            <releases>
+                <enabled>true</enabled>
+            </releases>
+            <snapshots>
+                <enabled>false</enabled>
+            </snapshots>
+        </pluginRepository>
+    </pluginRepositories>
 </project>
