@@ -60,8 +60,8 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # 创建非root用户
-RUN groupadd -g 1000 telegram && \
-    useradd -r -u 1000 -g telegram -s /bin/bash telegram
+RUN groupadd -g 1000 telegram || true && \
+    useradd -r -u 1000 -g telegram -s /bin/bash telegram || true
 
 # 设置工作目录
 WORKDIR /app
