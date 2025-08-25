@@ -25,13 +25,8 @@ RUN echo "构建平台: $BUILDPLATFORM" && \
 # 设置工作目录
 WORKDIR /build
 
-# 复制Maven配置文件
+# 复制Maven配置文件和源代码
 COPY pom.xml .
-
-# 下载依赖（利用Docker层缓存）
-RUN mvn dependency:go-offline -B
-
-# 复制源代码
 COPY src/ src/
 
 # 构建应用（跳过测试以加快构建速度）
