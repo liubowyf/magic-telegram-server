@@ -29,8 +29,13 @@ WORKDIR /build
 COPY pom.xml .
 COPY src/ src/
 
-# 构建应用（跳过测试以加快构建速度）
-RUN mvn clean package -DskipTests -B
+# 构建应用（完全跳过测试编译和执行，增加重试机制）
+RUN mvn clean package -DskipTests -Dmaven.test.skip=true -B \
+    -Dmaven.wagon.http.retryHandler.count=3 \
+    -Dmaven.wagon.http.pool=false \
+    -Dmaven.wagon.httpconnectionManager.ttlSeconds=120 \
+    -Dmaven.wagon.http.connectionTimeout=60000 \
+    -Dmaven.wagon.http.readTimeout=60000
 
 # 验证构建产物
 RUN ls -la target/ && \
