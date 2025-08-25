@@ -2,9 +2,6 @@
 
 一个基于Spring Boot和TDLight-Java的Telegram单账户消息实时监听服务。
 
-## CI/CD状态
-
-[![Docker Build](https://github.com/your-username/magic-telegram-server/actions/workflows/docker-build.yml/badge.svg)](https://github.com/your-username/magic-telegram-server/actions/workflows/docker-build.yml)
 
 ## 功能特性
 
@@ -19,10 +16,18 @@
 - 🗜️ **数据压缩优化** - 自动GZIP压缩，节省存储空间
 - 🔒 **数据完整性校验** - SHA256哈希校验确保数据安全
 - ⚡ **智能存储策略** - 根据数据大小自动选择最优存储方式
+- 🐳 **Docker支持** - 提供完整的Docker部署方案，支持内置和外部MongoDB
 - 🎯 完整的功能闭环：账户创建 → Session流程 → 消息监听
 
 ## 系统要求
 
+### 🐳 Docker部署
+- Docker 20.0+
+- Docker Compose 2.0+ (可选)
+- macOS/Linux/Windows
+- 网络代理（用于访问Telegram服务器）
+
+### 🔧 本地开发部署
 - Java 17+
 - Maven 3.6+
 - MongoDB 4.0+ (用于GridFS存储)
@@ -45,17 +50,40 @@
 
 ## 快速开始
 
-### 1. 编译项目
+本项目支持两种部署方式：
+
+### 🐳 Docker部署（推荐）
+
+使用Docker可以快速部署，无需配置Java和Maven环境。详细的Docker部署指南请参考：
+
+📖 **[Docker部署指南](docs/DOCKER_GUIDE.md)**
+
+快速启动命令：
+```bash
+# 使用内置MongoDB（适合开发和测试）
+docker run -d \
+  --name magic-telegram \
+  -p 8080:8080 \
+  -e TELEGRAM_API_ID=your_api_id \
+  -e TELEGRAM_API_HASH=your_api_hash \
+  -e PROXY_HOST=host.docker.internal \
+  -e PROXY_PORT=7890 \
+  your-dockerhub-username/magic-telegram-server:latest
+```
+
+### 🔧 本地开发部署
+
+#### 1. 编译项目
 ```bash
 mvn clean compile -s settings.xml
 ```
 
-### 2. 运行应用
+#### 2. 运行应用
 ```bash
 mvn spring-boot:run -s settings.xml
 ```
 
-### 3. 使用Web管理系统
+#### 3. 使用Web管理系统
 通过浏览器访问 `http://localhost:8080/api/admin/index.html` 使用可视化界面完成账户创建、认证和消息监听等所有操作。
 
 ## Web管理系统
@@ -270,7 +298,25 @@ magic-telegram-server/
 
 ## 使用示例
 
-完整的使用流程示例：
+### 🐳 Docker部署示例
+
+```bash
+# 1. 使用Docker快速启动（推荐）
+docker run -d \
+  --name magic-telegram \
+  -p 8080:8080 \
+  -e TELEGRAM_API_ID=your_api_id \
+  -e TELEGRAM_API_HASH=your_api_hash \
+  -e PROXY_HOST=host.docker.internal \
+  -e PROXY_PORT=7890 \
+  your-dockerhub-username/magic-telegram-server:latest
+
+# 2. 打开Web管理系统
+# 在浏览器中访问: http://localhost:8080/api/admin/index.html
+# 通过可视化界面完成账户创建、API配置、认证和消息监听等操作
+```
+
+### 🔧 本地开发示例
 
 ```bash
 # 1. 启动应用
@@ -283,6 +329,8 @@ mvn spring-boot:run
 
 
 ## 版本历史
+
+
 
 ### v1.2.1 (2025-01-15)
 - 🔧 **多平台支持优化**: 修复了仅支持macOS的问题
