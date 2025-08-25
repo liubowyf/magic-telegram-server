@@ -27,16 +27,15 @@ WORKDIR /build
 
 # 复制Maven配置文件
 COPY pom.xml .
-COPY temp-settings.xml .
 
-# 下载依赖（利用Docker层缓存，使用自定义settings.xml）
-RUN mvn dependency:go-offline -B -s temp-settings.xml
+# 下载依赖（利用Docker层缓存）
+RUN mvn dependency:go-offline -B
 
 # 复制源代码
 COPY src/ src/
 
-# 构建应用（跳过测试以加快构建速度，使用自定义settings.xml）
-RUN mvn clean package -DskipTests -B -s temp-settings.xml
+# 构建应用（跳过测试以加快构建速度）
+RUN mvn clean package -DskipTests -B
 
 # 验证构建产物
 RUN ls -la target/ && \
