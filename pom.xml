@@ -74,6 +74,14 @@
             <!-- 版本由BOM管理 -->
         </dependency>
         
+        <!-- Linux x86_64 (Clang with OpenSSL 3.x) - 用于Docker容器 -->
+        <dependency>
+            <groupId>it.tdlight</groupId>
+            <artifactId>tdlight-natives</artifactId>
+            <classifier>linux_amd64_clang_ssl3</classifier>
+            <!-- 版本由BOM管理 -->
+        </dependency>
+        
         <!-- Windows x86_64 -->
         <dependency>
             <groupId>it.tdlight</groupId>

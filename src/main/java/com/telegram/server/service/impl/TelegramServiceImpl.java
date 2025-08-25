@@ -251,30 +251,40 @@ public class TelegramServiceImpl implements ITelegramService {
         try {
             logger.info("正在初始化Telegram服务基础组件...");
             
-            // 初始化TDLight原生库
-            Init.init();
-            
-            // 设置日志级别
-            Log.setLogMessageHandler(1, new Slf4JLogMessageHandler());
-            
-            // 创建客户端工厂
-            clientFactory = new SimpleTelegramClientFactory();
-            
-            logger.info("Telegram服务基础组件初始化完成");
-            
             // 初始化Session管理服务
             sessionService.init();
             
             // 从MongoDB加载配置（优先）或从配置管理器加载配置
             loadConfigFromMongoDB();
             
-            // 自动尝试使用默认配置初始化客户端
-            // 如果存在有效的session，将自动恢复登录状态
-            autoInitializeClient();
+            // 检查API配置，只有配置完整时才初始化TDLight库
+            if (validateApiConfiguration()) {
+                logger.info("检测到有效的API配置，正在初始化TDLight库...");
+                
+                // 初始化TDLight原生库
+                Init.init();
+                
+                // 设置日志级别
+                Log.setLogMessageHandler(1, new Slf4JLogMessageHandler());
+                
+                // 创建客户端工厂
+                clientFactory = new SimpleTelegramClientFactory();
+                
+                logger.info("TDLight库初始化完成");
+                
+                // 自动尝试使用默认配置初始化客户端
+                // 如果存在有效的session，将自动恢复登录状态
+                autoInitializeClient();
+            } else {
+                logger.info("API配置不完整，跳过TDLight库初始化。应用将以配置模式启动。");
+            }
+            
+            logger.info("Telegram服务基础组件初始化完成");
             
         } catch (Exception e) {
             logger.error("初始化Telegram服务失败", e);
-            throw new RuntimeException("Failed to initialize Telegram service", e);
+            // 不抛出异常，允许应用继续启动
+            logger.warn("Telegram服务初始化失败，但应用将继续启动以支持配置管理");
         }
     }
     
