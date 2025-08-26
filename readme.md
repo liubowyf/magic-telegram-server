@@ -149,6 +149,25 @@ http://localhost:8080/api/admin/index.html
 
 ```
 magic-telegram-server/
+├── .dockerignore                                   # Docker忽略文件
+├── .env                                            # 环境变量配置
+├── .env.example                                    # 环境变量示例
+├── .env.external.example                           # 外部环境变量示例
+├── .github/                                        # GitHub Actions配置
+│   └── workflows/
+│       └── docker-build.yml                       # Docker自动构建流程
+├── docker/                                         # Docker相关文件
+│   ├── .dockerignore                               # Docker忽略文件
+│   ├── Dockerfile                                  # 主Dockerfile
+│   ├── Dockerfile.simple                           # 简化版Dockerfile
+│   ├── docker-compose.yml                         # Docker Compose配置
+│   ├── docker-compose.external.yml                # 外部Docker Compose配置
+│   ├── app/                                        # 应用配置
+│   │   └── config/                                 # 配置文件目录
+│   └── mongodb/                                    # MongoDB配置
+│       └── init/                                   # MongoDB初始化脚本
+├── docs/                                           # 文档目录
+│   └── images/                                     # 文档图片
 ├── src/
 │   ├── main/
 │   │   ├── java/com/telegram/server/
@@ -224,8 +243,8 @@ magic-telegram-server/
 │       ├── java/                                   # Java测试
 │       └── resources/                              # 测试资源
 │           └── application-test.yml                # 测试配置
-├── docs/                                           # 文档目录
 ├── pom.xml                                         # Maven配置
+├── settings.xml                                    # Maven设置
 ├── LICENSE                                         # 许可证文件
 └── readme.md                                       # 项目说明
 ```
@@ -303,13 +322,10 @@ magic-telegram-server/
 
 ```bash
 # 1. 使用Docker快速启动（推荐）
-docker run -d \
-  --name magic-telegram \
-  -p 8080:8080 \
-  -e PROXY_HOST=host.docker.internal \
-  -e PROXY_PORT=7890 \
-  your-dockerhub-username/magic-telegram-server:latest
+cd docker
+docker compose up -d
 
+#根据需要选择合适的环境变量文件
 # 2. 打开Web管理系统
 # 在浏览器中访问: http://localhost:8080/api/admin/index.html
 # 通过可视化界面完成账户创建、API配置、认证和消息监听等操作
@@ -331,14 +347,15 @@ mvn spring-boot:run
 
 ## 版本历史
 
+### v1.2.13 (2025-08-26)
 
+- 🐳 **Docker优化**: 支持docker启动，支持打包启动和依赖外部mongodb两种方式
 
-### v1.2.1 (2025-01-15)
+### v1.2.1 (2025-08-15)
 - 🔧 **多平台支持优化**: 修复了仅支持macOS的问题
 - 🐧 **Linux支持**: 添加了Linux x86_64 (GNU GCC + OpenSSL 1.x)原生库支持
 - 🪟 **Windows支持**: 添加了Windows x86_64原生库支持
 - 📦 **TDLight原生库**: 完善了跨平台TDLight原生库依赖配置
-- 🐳 **Docker优化**: 修复了Docker环境下TDLight原生库加载问题
 
 ### v1.1.0 (2025-08-05)
 - 💾 **GridFS智能存储**: 基于MongoDB GridFS的高效Session存储方案
@@ -349,8 +366,8 @@ mvn spring-boot:run
 ## 作者
 
 - **作者**: liubo
-- **日期**: 2025-01-15
-- **版本**: 1.2.1 (多平台支持版)
+- **日期**: 2025-08-15
+- **版本**: 1.2.3 (多平台支持版)
 
 ## 许可证
 
