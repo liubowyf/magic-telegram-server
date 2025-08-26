@@ -48,13 +48,13 @@ cp .env.external.example .env
 # 编辑 .env 文件，配置MongoDB连接信息
 
 # 3. 启动服务（外部MongoDB）
-docker-compose -f docker-compose.external.yml up -d
+docker-compose -f docker/docker-compose.external.yml up -d
 
 # 4. 查看服务状态
-docker-compose -f docker-compose.external.yml ps
+docker-compose -f docker/docker-compose.external.yml ps
 
 # 5. 查看日志
-docker-compose -f docker-compose.external.yml logs -f magic-telegram-server
+docker-compose -f docker/docker-compose.external.yml logs -f magic-telegram-server
 ```
 
 ## 环境变量配置
@@ -94,7 +94,7 @@ MONGO_PASSWORD=your_password
 docker-compose up -d
 
 # 外部MongoDB
-docker-compose -f docker-compose.external.yml up -d
+docker-compose -f docker/docker-compose.external.yml up -d
 ```
 
 ### 停止服务
@@ -104,7 +104,7 @@ docker-compose -f docker-compose.external.yml up -d
 docker-compose down
 
 # 外部MongoDB
-docker-compose -f docker-compose.external.yml down
+docker-compose -f docker/docker-compose.external.yml down
 ```
 
 ### 重启服务
@@ -114,7 +114,7 @@ docker-compose -f docker-compose.external.yml down
 docker-compose restart
 
 # 外部MongoDB
-docker-compose -f docker-compose.external.yml restart
+docker-compose -f docker/docker-compose.external.yml restart
 ```
 
 ### 查看日志

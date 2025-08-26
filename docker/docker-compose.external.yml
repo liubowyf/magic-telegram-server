@@ -91,16 +91,16 @@ volumes:
 #    - MONGODB_URI（推荐）或分离的MongoDB配置
 # 
 # 3. 启动服务:
-#    docker-compose -f docker-compose.external.yml up -d
-# 
-# 4. 查看日志:
-#    docker-compose -f docker-compose.external.yml logs -f
-# 
-# 5. 停止服务:
-#    docker-compose -f docker-compose.external.yml down
-# 
-# 6. 完全清理（包括数据）:
-#    docker-compose -f docker-compose.external.yml down -v
+#    docker-compose -f docker/docker-compose.external.yml up -d
+
+# 查看日志:
+#    docker-compose -f docker/docker-compose.external.yml logs -f
+
+# 停止服务:
+#    docker-compose -f docker/docker-compose.external.yml down
+
+# 停止并删除数据卷:
+#    docker-compose -f docker/docker-compose.external.yml down -v
 # 
 # 访问地址:
 # - 应用: http://localhost:8080
