@@ -537,21 +537,26 @@ magic-telegram-server/
 
 ---
 
+---
+
 <div align="center">
 
-## 🌍 English Documentation {#english}
+# 🌍 English Documentation
+
+</div>
 
 **Magic Telegram Server** is an enterprise-grade Telegram message monitoring and management platform built with Spring Boot and TDLight-Java.
 
-### 🚀 Key Features
-- **One-Click Deployment** - Docker Compose ready, 5-minute setup
-- **High Performance** - Built on Spring Boot 3.2 + TDLight native libraries
-- **Smart Storage** - MongoDB GridFS + Auto compression + Integrity verification
-- **Modern UI** - Responsive web management interface
-- **Enterprise Security** - Session persistence + Data encryption + Access control
-- **Cloud Native** - Complete Docker ecosystem + Multi-platform deployment
+## 🚀 Key Features
 
-### 📦 Quick Start
+- **🎯 One-Click Deployment** - Docker Compose ready, 5-minute setup
+- **⚡ High Performance** - Built on Spring Boot 3.2 + TDLight native libraries  
+- **💾 Smart Storage** - MongoDB GridFS + Auto compression + Integrity verification
+- **🎨 Modern UI** - Responsive web management interface
+- **🔒 Enterprise Security** - Session persistence + Data encryption + Access control
+- **☁️ Cloud Native** - Complete Docker ecosystem + Multi-platform deployment
+
+## 📦 Quick Start
 
 ```bash
 # Clone and start
@@ -563,28 +568,40 @@ docker compose up -d
 open http://localhost:8080/api/admin/index.html
 ```
 
-### 🎯 Use Cases
-- **Message Monitoring** - Real-time Telegram group message listening
-- **Bot Development** - Backend service for Telegram bots
-- **Data Analytics** - Collect and analyze Telegram data
-- **Enterprise Integration** - Integrate with existing systems
+## 🎯 Use Cases
 
-### 🛠️ Tech Stack
-- **Backend**: Spring Boot 3.2, TDLight-Java 3.4
-- **Database**: MongoDB 4.0+ with GridFS
-- **Container**: Docker & Docker Compose
-- **Build**: Maven 3.6+, Java 17+
+| Scenario | Description |
+|----------|-------------|
+| **📱 Message Monitoring** | Real-time Telegram group message listening |
+| **🤖 Bot Development** | Backend service for Telegram bots |
+| **📊 Data Analytics** | Collect and analyze Telegram data |
+| **🏢 Enterprise Integration** | Integrate with existing systems |
+
+## 🛠️ Tech Stack
+
+| Component | Technology |
+|-----------|------------|
+| **Backend** | Spring Boot 3.2, TDLight-Java 3.4 |
+| **Database** | MongoDB 4.0+ with GridFS |
+| **Container** | Docker & Docker Compose |
+| **Build** | Maven 3.6+, Java 17+ |
 
 ---
+
+<div align="center">
 
 ## 🏷️ Keywords
 
-`telegram` `spring-boot` `tdlight` `mongodb` `gridfs` `docker` `message-listener` `telegram-api` `java` `enterprise` `real-time` `monitoring` `bot` `automation` `microservice` `cloud-native`
+`telegram` • `spring-boot` • `tdlight` • `mongodb` • `gridfs` • `docker`  
+`message-listener` • `telegram-api` • `java` • `enterprise` • `real-time`  
+`monitoring` • `bot` • `automation` • `microservice` • `cloud-native`
 
 ---
 
-**⭐ 如果这个项目对你有帮助，请给我们一个 Star！**
+### ⭐ Star Us!
 
-**⭐ If this project helps you, please give us a Star!**
+**🇨🇳 如果这个项目对你有帮助，请给我们一个 Star！**
+
+**🇺🇸 If this project helps you, please give us a Star!**
 
 </div>
