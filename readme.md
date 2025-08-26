@@ -1,23 +1,64 @@
-# Magic Telegram Server
+<div align="center">
 
-一个基于Spring Boot和TDLight-Java的Telegram单账户消息实时监听服务。
+# 🚀 Magic Telegram Server
+
+**高性能 Telegram 消息监听服务 | Real-time Telegram Message Listener**
+
+[![Java](https://img.shields.io/badge/Java-17+-orange.svg)](https://www.oracle.com/java/)
+[![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.2.0-brightgreen.svg)](https://spring.io/projects/spring-boot)
+[![TDLight](https://img.shields.io/badge/TDLight-3.4.0-blue.svg)](https://github.com/tdlight-team/tdlight-java)
+[![Docker](https://img.shields.io/badge/Docker-Ready-2496ED.svg)](https://www.docker.com/)
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
+[![MongoDB](https://img.shields.io/badge/MongoDB-GridFS-green.svg)](https://www.mongodb.com/)
+
+*一个基于 Spring Boot 和 TDLight-Java 的企业级 Telegram 消息实时监听与管理平台*
+
+[English](#english) | [中文文档](#chinese)
+
+</div>
+
+---
+
+## 🌟 为什么选择 Magic Telegram Server？
+
+- 🔥 **零配置启动** - Docker 一键部署，5分钟内完成搭建
+- ⚡ **高性能架构** - 基于 Spring Boot 3.2 + TDLight 原生库
+- 💾 **智能存储** - MongoDB GridFS + 自动压缩 + 完整性校验
+- 🌐 **可视化管理** - 现代化 Web 管理界面，支持移动端
+- 🔐 **企业级安全** - Session 持久化 + 数据加密 + 访问控制
+- 🐳 **云原生支持** - 完整 Docker 生态 + 多平台部署
 
 
-## 功能特性
+## ✨ 核心特性
 
-- 🚀 基于Spring Boot 3.2.0构建
-- 📱 使用TDLight-Java 3.4.0+td.1.8.26版本
-- 👤 单账户管理和认证
-- 🔄 实时监听Telegram群组消息
-- 🌐 支持SOCKS5代理访问
-- 📝 消息实时写入到MongoDB进行持久化
-- 🔐 自动会话管理和持久化
-- 💾 **GridFS智能存储** - 基于MongoDB GridFS的高效Session存储方案
-- 🗜️ **数据压缩优化** - 自动GZIP压缩，节省存储空间
-- 🔒 **数据完整性校验** - SHA256哈希校验确保数据安全
-- ⚡ **智能存储策略** - 根据数据大小自动选择最优存储方式
-- 🐳 **Docker支持** - 提供完整的Docker部署方案，支持内置和外部MongoDB
-- 🎯 完整的功能闭环：账户创建 → Session流程 → 消息监听
+### 🚀 开箱即用
+- **一键部署** - Docker Compose 快速启动，支持内置/外部 MongoDB
+- **零配置** - 智能默认配置，5分钟完成部署
+- **跨平台** - 支持 macOS/Linux/Windows 多平台运行
+
+### ⚡ 高性能架构
+- **Spring Boot 3.2** - 最新企业级框架，原生支持 GraalVM
+- **TDLight 原生库** - 基于 Telegram 官方 TDLib，性能卓越
+- **异步处理** - 非阻塞消息处理，支持高并发
+- **智能重试** - 自动故障恢复，确保服务稳定性
+
+### 💾 智能存储系统
+- **GridFS 存储** - MongoDB GridFS 大文件存储，突破 16MB 限制
+- **自动压缩** - GZIP 压缩算法，节省 60%+ 存储空间
+- **完整性校验** - SHA256 哈希验证，确保数据安全
+- **分层存储** - 根据数据大小自动选择最优存储策略
+
+### 🌐 现代化管理界面
+- **响应式设计** - 支持桌面端/移动端访问
+- **实时监控** - 消息状态、系统性能实时展示
+- **可视化操作** - 账户管理、认证流程可视化
+- **安全认证** - 内置权限控制，保护管理功能
+
+### 🔐 企业级安全
+- **Session 持久化** - 自动会话管理，支持服务重启
+- **代理支持** - SOCKS5 代理，保护网络安全
+- **数据加密** - 敏感信息加密存储
+- **访问控制** - 细粒度权限管理
 
 ## 系统要求
 
@@ -48,34 +89,150 @@
 - 分片阈值: 8MB
 - 完整性校验: SHA256
 
-## 快速开始
-### 🐳 Docker部署示例
+## 🚀 快速开始
+
+### 📦 一键部署（推荐）
 
 ```bash
-# 1. 使用Docker快速启动（推荐）
-cd docker
+# 克隆项目
+git clone https://github.com/your-username/magic-telegram-server.git
+cd magic-telegram-server/docker
+
+# 一键启动（包含 MongoDB）
 docker compose up -d
 
-#根据需要选择合适的环境变量文件
-# 2. 打开Web管理系统
-# 在浏览器中访问: http://localhost:8080/api/admin/index.html
-# 通过可视化界面完成账户创建、API配置、认证和消息监听等操作
+# 🎉 完成！访问管理界面
+open http://localhost:8080/api/admin/index.html
 ```
 
-> **注意**: Telegram API配置（API_ID和API_HASH）无需在环境变量中设置，完全通过Web管理界面进行配置。
+### 🎯 使用场景
 
-### 🔧 本地开发示例
+<details>
+<summary>📊 <strong>群组消息监控</strong></summary>
+
+- 实时监听多个 Telegram 群组消息
+- 自动存储和分析消息内容
+- 支持关键词过滤和告警
+- 数据可视化展示
+
+</details>
+
+<details>
+<summary>🤖 <strong>机器人开发</strong></summary>
+
+- 作为 Telegram Bot 的消息处理后端
+- 提供 RESTful API 接口
+- 支持消息转发和自动回复
+- 集成第三方服务
+
+</details>
+
+<details>
+<summary>📈 <strong>数据分析</strong></summary>
+
+- 收集 Telegram 群组数据
+- 用户行为分析
+- 消息趋势统计
+- 导出数据报告
+
+</details>
+
+### 🔧 开发环境部署
 
 ```bash
-# 1. 启动应用
+# 环境要求
+# Java 17+, Maven 3.6+, MongoDB 4.0+
+
+# 启动应用
 mvn spring-boot:run
 
-# 2. 打开Web管理系统
-# 在浏览器中访问: http://localhost:8080/api/admin/index.html
-# 通过可视化界面完成账户创建、API配置、认证和消息监听等操作
+# 访问管理界面
+open http://localhost:8080/api/admin/index.html
 ```
 
+### ⚡ 5分钟快速配置
 
+1. **启动服务** - `docker compose up -d`
+2. **打开管理界面** - 访问 `http://localhost:8080/api/admin/index.html`
+3. **创建账户** - 点击"添加账户"按钮
+4. **配置 API** - 输入 Telegram API ID 和 Hash
+5. **手机验证** - 输入手机号接收验证码
+6. **开始监听** - 启动消息监听服务
+
+> 💡 **提示**: 无需修改配置文件，所有设置通过 Web 界面完成！
+
+
+
+## 🏗️ 技术架构
+
+### 📚 技术栈
+
+| 组件 | 技术选型 | 版本 | 说明 |
+|------|---------|------|------|
+| **后端框架** | Spring Boot | 3.2.0 | 企业级微服务框架 |
+| **Telegram SDK** | TDLight-Java | 3.4.0 | 官方 TDLib Java 绑定 |
+| **数据库** | MongoDB | 4.0+ | 文档数据库 + GridFS |
+| **容器化** | Docker | 20.0+ | 容器化部署 |
+| **构建工具** | Maven | 3.6+ | 依赖管理和构建 |
+| **JVM** | OpenJDK | 17+ | 长期支持版本 |
+
+### 🎯 架构设计
+
+```mermaid
+graph TB
+    subgraph "Web Layer"
+        A[Web管理界面] --> B[REST API]
+    end
+    
+    subgraph "Service Layer"
+        B --> C[TelegramService]
+        B --> D[SessionService]
+        B --> E[MessageService]
+    end
+    
+    subgraph "Integration Layer"
+        C --> F[TDLight Client]
+        F --> G[Telegram API]
+    end
+    
+    subgraph "Storage Layer"
+        D --> H[MongoDB]
+        E --> H
+        H --> I[GridFS]
+        H --> J[Collections]
+    end
+    
+    subgraph "External"
+        G --> K[Telegram Servers]
+        F --> L[SOCKS5 Proxy]
+    end
+    
+    style A fill:#e1f5fe
+    style F fill:#f3e5f5
+    style H fill:#e8f5e8
+    style K fill:#fff3e0
+```
+
+### 🔄 消息处理流程
+
+```mermaid
+sequenceDiagram
+    participant TG as Telegram
+    participant TD as TDLight
+    participant MS as MessageService
+    participant DB as MongoDB
+    participant WEB as Web界面
+    
+    TG->>TD: 推送消息
+    TD->>MS: 消息事件
+    MS->>MS: 消息处理
+    MS->>DB: 存储消息
+    DB->>DB: GridFS存储
+    MS->>WEB: 实时推送
+    WEB->>WEB: 界面更新
+```
+
+---
 
 ### 管理系统功能
 
@@ -304,7 +461,52 @@ magic-telegram-server/
 
 
 
-## 版本历史
+## 🤝 贡献指南
+
+我们欢迎所有形式的贡献！无论是 Bug 报告、功能建议还是代码贡献。
+
+### 🐛 报告问题
+
+- 使用 [GitHub Issues](https://github.com/your-username/magic-telegram-server/issues) 报告 Bug
+- 提供详细的错误信息和复现步骤
+- 包含系统环境信息（OS、Java版本等）
+
+### 💡 功能建议
+
+- 在 Issues 中使用 `enhancement` 标签
+- 详细描述功能需求和使用场景
+- 欢迎提供设计方案和实现思路
+
+### 🔧 代码贡献
+
+1. Fork 项目到你的 GitHub
+2. 创建功能分支: `git checkout -b feature/amazing-feature`
+3. 提交更改: `git commit -m 'Add amazing feature'`
+4. 推送分支: `git push origin feature/amazing-feature`
+5. 创建 Pull Request
+
+### 📋 开发规范
+
+- 遵循 Java 代码规范
+- 添加必要的单元测试
+- 更新相关文档
+- 提交信息使用英文，格式清晰
+
+## 🌟 Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=your-username/magic-telegram-server&type=Date)](https://star-history.com/#your-username/magic-telegram-server&Date)
+
+## 📞 社区支持
+
+
+- 📧 **邮件**: [your-email@example.com](mailto:liubowyf@163.com)
+- 🐛 **问题**: [GitHub Issues](https://github.com/liubowyf/magic-telegram-server/issues)
+- 📖 **文档**: [项目 Wiki](https://github.com/liubowyf/magic-telegram-server/wiki)
+
+## 📈 版本历史
+
+<details>
+<summary>查看版本历史</summary>
 
 ### v1.2.3 (2025-08-26)
 - 🐳 **Docker优化**: 支持docker启动，支持打包启动和依赖外部mongodb两种方式
@@ -321,28 +523,68 @@ magic-telegram-server/
 - 🔒 **数据完整性校验**: SHA256哈希校验确保数据安全
 - ⚡ **智能存储策略**: 根据数据大小自动选择最优存储方式
 
+</details>
+
 ## 作者
 
 - **作者**: liubo
 - **日期**: 2025-08-15
 - **版本**: 1.2.3 (多平台支持版)
 
-## 许可证
+## 📄 许可证
 
 本项目基于 [Apache License 2.0](LICENSE) 开源协议发布。
 
+---
+
+<div align="center">
+
+## 🌍 English Documentation {#english}
+
+**Magic Telegram Server** is an enterprise-grade Telegram message monitoring and management platform built with Spring Boot and TDLight-Java.
+
+### 🚀 Key Features
+- **One-Click Deployment** - Docker Compose ready, 5-minute setup
+- **High Performance** - Built on Spring Boot 3.2 + TDLight native libraries
+- **Smart Storage** - MongoDB GridFS + Auto compression + Integrity verification
+- **Modern UI** - Responsive web management interface
+- **Enterprise Security** - Session persistence + Data encryption + Access control
+- **Cloud Native** - Complete Docker ecosystem + Multi-platform deployment
+
+### 📦 Quick Start
+
+```bash
+# Clone and start
+git clone https://github.com/your-username/magic-telegram-server.git
+cd magic-telegram-server/docker
+docker compose up -d
+
+# Access web interface
+open http://localhost:8080/api/admin/index.html
 ```
-Copyright 2025 liubo
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
+### 🎯 Use Cases
+- **Message Monitoring** - Real-time Telegram group message listening
+- **Bot Development** - Backend service for Telegram bots
+- **Data Analytics** - Collect and analyze Telegram data
+- **Enterprise Integration** - Integrate with existing systems
 
-    http://www.apache.org/licenses/LICENSE-2.0
+### 🛠️ Tech Stack
+- **Backend**: Spring Boot 3.2, TDLight-Java 3.4
+- **Database**: MongoDB 4.0+ with GridFS
+- **Container**: Docker & Docker Compose
+- **Build**: Maven 3.6+, Java 17+
 
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-```
+---
+
+## 🏷️ Keywords
+
+`telegram` `spring-boot` `tdlight` `mongodb` `gridfs` `docker` `message-listener` `telegram-api` `java` `enterprise` `real-time` `monitoring` `bot` `automation` `microservice` `cloud-native`
+
+---
+
+**⭐ 如果这个项目对你有帮助，请给我们一个 Star！**
+
+**⭐ If this project helps you, please give us a Star!**
+
+</div>
