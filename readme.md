@@ -49,47 +49,33 @@
 - 完整性校验: SHA256
 
 ## 快速开始
+### 🐳 Docker部署示例
 
-本项目支持两种部署方式：
-
-### 🐳 Docker部署（推荐）
-
-使用Docker可以快速部署，无需配置Java和Maven环境。详细的Docker部署指南请参考：
-
-📖 **[Docker部署指南](docs/DOCKER_GUIDE.md)**
-
-快速启动命令：
 ```bash
-# 使用内置MongoDB（适合开发和测试）
-docker run -d \
-  --name magic-telegram \
-  -p 8080:8080 \
-  -e PROXY_HOST=host.docker.internal \
-  -e PROXY_PORT=7890 \
-  your-dockerhub-username/magic-telegram-server:latest
+# 1. 使用Docker快速启动（推荐）
+cd docker
+docker compose up -d
 
-# 启动后访问 http://localhost:8080/api/admin/index.html
-# 通过Web管理界面配置Telegram API和其他设置
+#根据需要选择合适的环境变量文件
+# 2. 打开Web管理系统
+# 在浏览器中访问: http://localhost:8080/api/admin/index.html
+# 通过可视化界面完成账户创建、API配置、认证和消息监听等操作
 ```
 
-### 🔧 本地开发部署
+> **注意**: Telegram API配置（API_ID和API_HASH）无需在环境变量中设置，完全通过Web管理界面进行配置。
 
-#### 1. 编译项目
+### 🔧 本地开发示例
+
 ```bash
-mvn clean compile -s settings.xml
+# 1. 启动应用
+mvn spring-boot:run
+
+# 2. 打开Web管理系统
+# 在浏览器中访问: http://localhost:8080/api/admin/index.html
+# 通过可视化界面完成账户创建、API配置、认证和消息监听等操作
 ```
 
-#### 2. 运行应用
-```bash
-mvn spring-boot:run -s settings.xml
-```
 
-#### 3. 使用Web管理系统
-通过浏览器访问 `http://localhost:8080/api/admin/index.html` 使用可视化界面完成账户创建、认证和消息监听等所有操作。
-
-## Web管理系统
-
-本项目提供了一个功能完整的Web管理系统，可通过浏览器访问 `http://localhost:8080/api/admin/index.html` 进行可视化管理。
 
 ### 管理系统功能
 
@@ -316,39 +302,11 @@ magic-telegram-server/
 - 检查TDLight依赖是否正确下载
 - 确认Java版本为17+
 
-## 使用示例
-
-### 🐳 Docker部署示例
-
-```bash
-# 1. 使用Docker快速启动（推荐）
-cd docker
-docker compose up -d
-
-#根据需要选择合适的环境变量文件
-# 2. 打开Web管理系统
-# 在浏览器中访问: http://localhost:8080/api/admin/index.html
-# 通过可视化界面完成账户创建、API配置、认证和消息监听等操作
-```
-
-> **注意**: Telegram API配置（API_ID和API_HASH）无需在环境变量中设置，完全通过Web管理界面进行配置。
-
-### 🔧 本地开发示例
-
-```bash
-# 1. 启动应用
-mvn spring-boot:run
-
-# 2. 打开Web管理系统
-# 在浏览器中访问: http://localhost:8080/api/admin/index.html
-# 通过可视化界面完成账户创建、API配置、认证和消息监听等操作
-```
 
 
 ## 版本历史
 
 ### v1.2.13 (2025-08-26)
-
 - 🐳 **Docker优化**: 支持docker启动，支持打包启动和依赖外部mongodb两种方式
 
 ### v1.2.1 (2025-08-15)
