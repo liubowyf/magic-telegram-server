@@ -494,7 +494,7 @@ magic-telegram-server/
 
 ## 🌟 Star History
 
-[![Star History Chart](https://api.star-history.com/svg?repos=your-username/magic-telegram-server&type=Date)](https://star-history.com/#your-username/magic-telegram-server&Date)
+[![Star History Chart](https://api.star-history.com/svg?repos=liubowyf/magic-telegram-server&type=Date)](https://api.star-history.com/svg?repos=liubowyf/magic-telegram-server&type=Date)
 
 ## 📞 社区支持
 
