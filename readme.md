@@ -499,7 +499,7 @@ magic-telegram-server/
 ## 📞 社区支持
 
 
-- 📧 **邮件**: [your-email@example.com](mailto:liubowyf@163.com)
+- 📧 **邮件**: [liubowyf@163.com](mailto:liubowyf@163.com)
 - 🐛 **问题**: [GitHub Issues](https://github.com/liubowyf/magic-telegram-server/issues)
 - 📖 **文档**: [项目 Wiki](https://github.com/liubowyf/magic-telegram-server/wiki)
 
