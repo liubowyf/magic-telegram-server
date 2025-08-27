@@ -442,8 +442,7 @@ magic-telegram-server/
 - 如有两步验证，确保密码正确
 
 ### Session问题
-- 如认证失败，可使用 `/telegram/session/clear` 清理Session数据
-- 清理后需重新进行完整认证流程
+- 如认证失败，需要重新进行完整认证流程
 - Session数据存储在MongoDB中，支持GridFS大文件存储
 - 检查MongoDB连接状态和GridFS配置
 

@@ -74,7 +74,6 @@ class AuthModal {
                                 <div class="help-text">从 https://my.telegram.org 获取</div>
                             </div>
                             <button class="btn btn-primary" id="auth-submit-api">下一步</button>
-                            <button class="btn btn-secondary" id="auth-reset-session">重置Session</button>
                         </div>
                         
                         <!-- 步骤2: 手机号 -->
@@ -146,7 +145,6 @@ class AuthModal {
         
         // 步骤按钮
         document.getElementById('auth-submit-api').addEventListener('click', () => this.submitApiConfig());
-        document.getElementById('auth-reset-session').addEventListener('click', () => this.resetSession());
         document.getElementById('auth-submit-phone').addEventListener('click', () => this.submitPhoneNumber());
         document.getElementById('auth-submit-code').addEventListener('click', () => this.submitAuthCode());
         document.getElementById('auth-submit-password').addEventListener('click', () => this.submitPassword());
@@ -315,15 +313,6 @@ class AuthModal {
         }
         
         try {
-            // 先清理现有session
-            this.showMessage('正在清理现有session...', 'info');
-            await fetch('/api/telegram/session/clear', {
-                method: 'DELETE'
-            });
-            
-            // 等待一秒确保清理完成
-            await new Promise(resolve => setTimeout(resolve, 1000));
-            
             const response = await fetch('/api/telegram/config', {
                 method: 'POST',
                 headers: {
@@ -345,28 +334,14 @@ class AuthModal {
     }
 
     /**
-     * 重置Session
+     * 重置Session (已废弃)
+     * 注意：由于后端接口已删除，此功能不再可用
      */
     async resetSession() {
-        try {
-            this.showMessage('正在重置Session...', 'info');
-            const response = await fetch('/api/telegram/session/clear', {
-                method: 'DELETE'
-            });
-            
-            const result = await response.json();
-            
-            if (result.success) {
-                this.showMessage('Session重置成功！', 'success');
-                // 重置到第一步
-                this.currentStep = 1;
-                this.updateStepIndicator();
-            } else {
-                this.showMessage(result.message || 'Session重置失败', 'error');
-            }
-        } catch (error) {
-            this.showMessage('网络错误: ' + error.message, 'error');
-        }
+        this.showMessage('Session重置功能已停用', 'warning');
+        // 仅重置到第一步
+        this.currentStep = 1;
+        this.updateStepIndicator();
     }
 
     /**
