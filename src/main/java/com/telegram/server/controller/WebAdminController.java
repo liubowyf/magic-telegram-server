@@ -290,7 +290,7 @@ public class WebAdminController {
      * @date 2025-01-17
      */
     @DeleteMapping("/messages/{messageId}")
-    public ResponseEntity<Map<String, Object>> deleteMessage(@PathVariable String messageId) {
+    public ResponseEntity<Map<String, Object>> deleteMessage(@PathVariable("messageId") String messageId) {
         Map<String, Object> response = new HashMap<>();
         try {
             boolean deleted = messageService.deleteMessage(messageId);
