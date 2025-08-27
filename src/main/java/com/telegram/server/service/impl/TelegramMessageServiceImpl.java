@@ -806,6 +806,32 @@ public class TelegramMessageServiceImpl implements ITelegramMessageService {
     }
 
     /**
+     * 删除单个消息
+     * 
+     * @param messageId 消息ID
+     * @return 是否删除成功
+     * @author liubo
+     * @date 2025-01-17
+     */
+    @Override
+    public boolean deleteMessage(String messageId) {
+        try {
+            Optional<TelegramMessage> messageOpt = messageRepository.findById(messageId);
+            if (messageOpt.isPresent()) {
+                messageRepository.deleteById(messageId);
+                logger.info("删除消息成功: messageId={}", messageId);
+                return true;
+            } else {
+                logger.warn("消息不存在，无法删除: messageId={}", messageId);
+                return false;
+            }
+        } catch (Exception e) {
+            logger.error("删除消息失败: messageId={}, error={}", messageId, e.getMessage(), e);
+            return false;
+        }
+    }
+
+    /**
      * 清理指定时间之前的消息
      * 用于定期数据清理
      * 

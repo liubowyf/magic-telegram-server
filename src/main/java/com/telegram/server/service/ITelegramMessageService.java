@@ -252,6 +252,14 @@ public interface ITelegramMessageService {
     long deleteMessagesByAccountAndChat(String accountPhone, Long chatId);
 
     /**
+     * 删除单个消息
+     * 
+     * @param messageId 消息ID
+     * @return 是否删除成功
+     */
+    boolean deleteMessage(String messageId);
+
+    /**
      * 清理指定时间之前的消息
      * 用于定期数据清理
      * 
