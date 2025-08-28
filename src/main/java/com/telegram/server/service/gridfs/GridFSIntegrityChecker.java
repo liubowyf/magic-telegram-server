@@ -3,6 +3,7 @@ package com.telegram.server.service.gridfs;
 import com.mongodb.client.gridfs.model.GridFSFile;
 import com.telegram.server.service.gridfs.GridFSService.BucketType;
 import com.telegram.server.service.gridfs.GridFSService.GridFSException;
+import com.telegram.server.service.gridfs.GridFSUtils;
 import org.bson.Document;
 import org.bson.types.ObjectId;
 import org.slf4j.Logger;
@@ -11,10 +12,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 
-import java.io.ByteArrayInputStream;
-import java.io.IOException;
 import java.util.*;
-import java.util.zip.GZIPInputStream;
 
 /**
  * GridFS数据完整性检查工具
@@ -94,9 +92,9 @@ public class GridFSIntegrityChecker {
 
             // 检查压缩格式一致性
             if ("gzip".equals(compressionType)) {
-                if (!isValidGzipData(data)) {
+                if (!GridFSUtils.isValidGzipData(data)) {
                     // 检查是否是未压缩的JSON数据
-                    if (isLikelyJsonData(data)) {
+                    if (GridFSUtils.isLikelyJsonData(data)) {
                         return new CheckResult(fileId, filename, false, 
                                 "元数据标记为GZIP但数据是未压缩的JSON", 
                                 "更新元数据compressionType为none或重新压缩数据");
@@ -107,7 +105,7 @@ public class GridFSIntegrityChecker {
                     }
                 }
             } else if ("none".equals(compressionType) || compressionType == null) {
-                if (isValidGzipData(data)) {
+                if (GridFSUtils.isValidGzipData(data)) {
                     return new CheckResult(fileId, filename, false, 
                             "元数据标记为未压缩但数据是GZIP格式", 
                             "更新元数据compressionType为gzip");
@@ -181,51 +179,5 @@ public class GridFSIntegrityChecker {
         return report.toString();
     }
 
-    /**
-     * 检查数据是否是有效的GZIP格式
-     * 
-     * @param data 待检查的数据
-     * @return 如果是有效的GZIP数据则返回true
-     */
-    private boolean isValidGzipData(byte[] data) {
-        if (data == null || data.length < 2) {
-            return false;
-        }
-        
-        // GZIP文件的魔数是0x1f, 0x8b
-        if ((data[0] & 0xff) != 0x1f || (data[1] & 0xff) != 0x8b) {
-            return false;
-        }
-        
-        // 尝试解压缩来验证数据完整性
-        try (ByteArrayInputStream bais = new ByteArrayInputStream(data);
-             GZIPInputStream gzipIn = new GZIPInputStream(bais)) {
-            
-            byte[] buffer = new byte[1024];
-            while (gzipIn.read(buffer) != -1) {
-                // 只是读取数据来验证格式，不需要保存
-            }
-            return true;
-        } catch (IOException e) {
-            return false;
-        }
-    }
 
-    /**
-     * 检查数据是否可能是JSON格式
-     * 
-     * @param data 待检查的数据
-     * @return 如果数据看起来像JSON则返回true
-     */
-    private boolean isLikelyJsonData(byte[] data) {
-        if (data == null || data.length < 2) {
-            return false;
-        }
-        
-        // 检查是否以JSON对象或数组开始和结束
-        char firstChar = (char) data[0];
-        char lastChar = (char) data[data.length - 1];
-        
-        return (firstChar == '{' && lastChar == '}') || (firstChar == '[' && lastChar == ']');
-    }
 }

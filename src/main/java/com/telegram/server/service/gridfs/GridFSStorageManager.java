@@ -4,7 +4,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.telegram.server.entity.TelegramSession;
 import com.telegram.server.repository.TelegramSessionRepository;
-// import com.telegram.server.service.gridfs.GridFSMigrationService; // TODO: 待实现
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -26,6 +26,7 @@ import com.telegram.server.service.gridfs.GridFSCompressionService.CompressionRe
 import com.telegram.server.service.gridfs.GridFSCompressionService.CompressionException;
 import com.telegram.server.service.gridfs.GridFSIntegrityService.IntegrityResult;
 import com.telegram.server.service.gridfs.GridFSIntegrityService.IntegrityException;
+import com.telegram.server.service.gridfs.GridFSUtils;
 import com.mongodb.client.gridfs.model.GridFSFile;
 
 /**
@@ -65,8 +66,6 @@ public class GridFSStorageManager {
     @Autowired
     private GridFSIntegrityService integrityService;
 
-    // @Autowired
-    // private GridFSMigrationService migrationService; // TODO: 待实现
 
     @Autowired
     private ObjectMapper objectMapper;
@@ -124,7 +123,7 @@ public class GridFSStorageManager {
             return null;
         }
 
-        // TODO: 检查是否需要迁移
+        // 检查session存储版本
         // if (migrationService.shouldMigrate(session)) {
         //     logger.info("检测到需要迁移的session: sessionId={}, 当前版本={}", 
         //             sessionId, session.getStorageVersion());
@@ -655,7 +654,7 @@ public class GridFSStorageManager {
                     logger.warn("GZIP解压失败，可能是数据格式不匹配，尝试作为未压缩数据处理: {}", e.getMessage());
                     
                     // 检查数据是否看起来像有效的JSON（大多数session数据都是JSON）
-                    if (isLikelyJsonData(compressedData)) {
+                    if (GridFSUtils.isLikelyJsonData(compressedData)) {
                         logger.info("数据似乎是未压缩的JSON，直接返回原始数据");
                         return compressedData;
                     }
@@ -671,23 +670,7 @@ public class GridFSStorageManager {
         }
     }
     
-    /**
-     * 检查数据是否可能是JSON格式
-     * 
-     * @param data 待检查的数据
-     * @return 如果数据看起来像JSON则返回true
-     */
-    private boolean isLikelyJsonData(byte[] data) {
-        if (data == null || data.length < 2) {
-            return false;
-        }
-        
-        // 检查是否以JSON对象或数组开始
-        char firstChar = (char) data[0];
-        char lastChar = (char) data[data.length - 1];
-        
-        return (firstChar == '{' && lastChar == '}') || (firstChar == '[' && lastChar == ']');
-    }
+
 
     /**
      * 验证数据完整性
